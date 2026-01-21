@@ -1,222 +1,69 @@
 # ========================================
-# 武侠风格对齐训练 - 配置文件
+# 武侠风格 LoRA 微调 - 简化配置
 # ========================================
 
 # ========================================
-# 1. 模型配置 (在这里定制模型!)
+# 1. 模型配置
 # ========================================
 model:
-  # 基座模型路径或HuggingFace模型名称
-  # 常用模型：
-  #   - Qwen/Qwen3-4B (推荐，显存友好)
-  #   - Qwen/Qwen3-8B (高性能，需更多显存)
-  #   - Qwen/Qwen2.5-1.5B (轻量级)
-  #   - meta-llama/Llama-3.1-8B (需申请)
-  #   - 01-ai/Yi-1.5-9B (中文友好)
-  #   - gpt2 (测试用)
   model_name_or_path: "Qwen/Qwen3-4B"
   
-  # 是否使用LoRA高效微调
+  # LoRA 配置
   use_lora: true
-  
-  # LoRA配置 (针对Qwen3-4B + 2×4090优化)
-  lora_r: 16              # LoRA rank - 标准配置（显存友好）
-                          # 高质量: 32, 显存紧张: 8
-  lora_alpha: 32          # LoRA alpha (通常是rank的2倍)
-  lora_dropout: 0.05      # LoRA dropout
-  lora_target_modules:    # 要应用LoRA的模块
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  lora_target_modules:
     - "q_proj"
     - "v_proj"
     - "k_proj"
     - "o_proj"
-    - "gate_proj"         # 添加FFN层以提升效果
-    - "up_proj"  
+    - "gate_proj"
+    - "up_proj"
     - "down_proj"
-    # 注意：7个模块在4B模型上显存占用可控
 
 
 # ========================================
-# 2. 训练配置
-# ========================================
-training:
-  # 输出目录
-  output_dir: "./output/wuxia_model"
-  
-  # 基础训练参数 (2×RTX 4090 优化配置 - DDP模式)
-  num_train_epochs: 5           # 训练轮数
-  per_device_train_batch_size: 2    # 每GPU的batch size
-                                     # DDP双卡优化：降低per_device，增加grad_accum
-  per_device_eval_batch_size: 8     # 评估batch size
-  gradient_accumulation_steps: 8    # 梯度累积步数
-  # 有效batch size = 2(per_device) × 8(accumulation) × 2(GPUs) = 32
-  # 黄金配置：平衡显存与吞吐量
-  
-  # 学习率 (针对4B模型优化)
-  learning_rate: 0.00002        # 2e-5，标准配置
-                                # 快速实验: 3e-5，高质量: 1e-5
-  warmup_steps: 100             # 预热步数
-  weight_decay: 0.01            # 权重衰减
-  max_grad_norm: 1.0            # 梯度裁剪
-  lr_scheduler_type: "cosine"   # 学习率调度器 (linear/cosine/constant)
-  
-  # 风格对齐核心参数 (重要!)
-  # 两阶段训练策略：
-  #   阶段1: kl_beta=0 (纯LoRA微调，学武侠风格)
-  #   阶段2: kl_beta=0.1 (加载checkpoint，KL保持通顺)
-  kl_beta: 0                    # 阶段1：禁用KL，纯微调
-                                # 阶段2改为: 0.08-0.15
-  # kl_beta调优（阶段2使用）：
-  #   - 风格不明显 → 降低到0.05
-  #   - 输出不通顺 → 提高到0.15-0.2
-  
-  kl_schedule: "constant"       # KL权重调度 (constant/linear/cosine)
-  kl_beta_min: 0.05            # KL最小值 (用于调度)
-  kl_beta_max: 0.2             # KL最大值 (用于调度)
-  
-  # 优化器配置
-  optimizer: "adamw_torch"
-  adam_beta1: 0.9
-  adam_beta2: 0.999
-  adam_epsilon: 0.00000001      # 1e-8
-  
-  # 保存和日志
-  save_strategy: "steps"        # 保存策略 (steps/epoch)
-  save_steps: 500               # 每N步保存一次
-  save_total_limit: 3           # 最多保留N个checkpoint
-  logging_steps: 10             # 每N步记录一次日志
-  eval_strategy: "steps"        # 评估策略
-  eval_steps: 500               # 每N步评估一次
-  
-  # GPU优化 (2×RTX 4090 - Ampere架构)
-  fp16: true                    # FP16混合精度（4090推荐）
-  bf16: false                   # BF16（4090上fp16更优）
-                                # 注：如要尝试bf16，设fp16=false, bf16=true
-  gradient_checkpointing: true  # 梯度检查点（节省显存，牺牲20%速度）
-                                # 建议开启以确保8B模型稳定运行
-  
-  # 其他
-  seed: 42
-  dataloader_num_workers: 4
-  remove_unused_columns: false
-
-
-# ========================================
-# 3. 数据配置 (针对中文武侠小说优化)
+# 2. 数据配置
 # ========================================
 data:
-  # 数据路径
-  data_dir: "./data"                        # 中文武侠小说txt文件目录
-  processed_data_file: "./processed_wuxia_data.jsonl"  # 处理后的数据
+  # 数据目录
+  data_dir: "./data"
   
-  # 数据处理参数 (中文优化)
-  max_length: 512               # 最大序列长度 (中文约200-250字)
-                                # Qwen tokenizer: ~1中文字=1.5-2 tokens
-  min_length: 64                # 最小序列长度 (中文约30-40字)
-  stride: 256                   # 滑动窗口步长
-  val_ratio: 0.05               # 验证集比例 (5%)
-  max_files: null               # 最大处理文件数 (null=使用全部武侠小说)
+  # 处理后的数据文件
+  processed_data_file: "./data/processed_wuxia.jsonl"
   
-  # 掩码策略 (针对中文武侠风格优化!)
-  span_mask_ratio: 0.6          # Random Span掩码比例 (60%)
-                                # 学习成语、招式名、环境描写
-  token_mask_ratio: 0.3         # Token级别掩码比例 (30%)
-                                # 学习武侠虚词：却、竟、便、乃、尔、焉
-  no_mask_ratio: 0.1            # 不掩码比例 (10%)
-                                # 保持中文语言基础
-  span_length_range: [3, 8]     # Span长度范围 (中文约1-3个词或成语)
-                                # 例：3-8 tokens ≈ "剑光一闪" 到 "血溅三尺惨叫之声"
+  # 数据处理参数
+  max_length: 512
+  min_length: 50
+  stride: 256
+  val_ratio: 0.05
+
+
+# ========================================
+# 3. 训练配置
+# ========================================
+training:
+  output_dir: "./output/wuxia_model"
   
-  # 中文武侠掩码调优：
-  #   - 学习四字成语/招式 → span_length_range改为[4, 12]
-  #   - 增强文言虚词学习 → token_mask_ratio提高到0.4
-  #   - 学习长句意境 → span_mask_ratio提高到0.7
-  #   - 更保守(保持流畅) → no_mask_ratio提高到0.2
-
-
-# ========================================
-# 4. 评估配置
-# ========================================
-evaluation:
-  eval_batch_size: 8
-  compute_perplexity: true          # 计算困惑度
-  compute_ngram_overlap: true       # 计算N-gram重合度
-  ngram_sizes: [2, 3, 4]           # N-gram大小
+  # 训练参数（2×4090 DDP优化）
+  num_train_epochs: 5
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 8
   
-  # 生成参数 (用于评估)
-  max_new_tokens: 100
-  temperature: 0.9                  # 温度 (0.7-1.0)
-  top_p: 0.9                        # 核采样
-  top_k: 50                         # Top-K采样
-  num_samples: 100                  # 生成样本数
-
-
-# ========================================
-# 5. GPU配置 (自动检测)
-# ========================================
-# 运行 'python check_gpu.py' 查看推荐配置
-# 
-# 显存不足时的优化：
-#   1. 减小 per_device_train_batch_size 到 1 或 2
-#   2. 增大 gradient_accumulation_steps 到 8 或 16
-#   3. 启用 gradient_checkpointing: true
-#   4. 减小 max_length 到 256
-#   5. 使用更小的模型 (Qwen2.5-1.5B)
-#   6. 使用4-bit量化 (需要额外配置)
-
-
-# ========================================
-# 6. 快速配置预设
-# ========================================
-# 取消注释以使用预设配置
-
-# 预设1: 快速测试 (小模型，少数据)
-# model:
-#   model_name_or_path: "gpt2"
-# data:
-#   max_files: 10
-# training:
-#   num_train_epochs: 1
-#   per_device_train_batch_size: 2
-
-# 预设2: 轻量级训练 (1.5B模型，8GB显存)
-# model:
-#   model_name_or_path: "Qwen/Qwen2.5-1.5B"
-# training:
-#   per_device_train_batch_size: 2
-#   gradient_accumulation_steps: 8
-#   gradient_checkpointing: true
-
-# 预设3: 标准训练 (7B模型，16-24GB显存)
-# model:
-#   model_name_or_path: "Qwen/Qwen2.5-7B"
-# training:
-#   per_device_train_batch_size: 4
-#   gradient_accumulation_steps: 4
-
-# 预设4: 高性能训练 (7B模型，32GB+显存)
-# model:
-#   model_name_or_path: "Qwen/Qwen2.5-7B"
-# training:
-#   per_device_train_batch_size: 8
-#   gradient_accumulation_steps: 2
-#   gradient_checkpointing: false
-#   bf16: true
-
-
-# ========================================
-# 7. 多阶段训练配置
-# ========================================
-# 阶段1: 大胆风格迁移 (低KL权重)
-# training:
-#   kl_beta: 0.05
-#   num_train_epochs: 1
-
-# 阶段2: 平衡优化
-# training:
-#   kl_beta: 0.1
-#   num_train_epochs: 2
-
-# 阶段3: 稳定收敛 (高KL权重)
-# training:
-#   kl_beta: 0.15
-#   num_train_epochs: 1
+  # 优化器参数
+  learning_rate: 0.0002
+  weight_decay: 0.01
+  warmup_steps: 100
+  
+  # 日志和保存
+  logging_steps: 10
+  save_steps: 200
+  eval_steps: 200
+  save_total_limit: 3
+  
+  # 高级选项
+  fp16: true
+  gradient_checkpointing: true
+  seed: 42
