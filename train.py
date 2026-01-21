@@ -32,6 +32,23 @@ class StyleAlignmentTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.masking_engine = masking_engine
     
+    def _wrap_model(self, model, training=True, dataloader=None):
+        """阻止DataParallel，但允许DDP（通过torchrun）"""
+        # 如果已经是DDP包装的，直接返回
+        if hasattr(model, 'module'):
+            return model
+        
+        # 如果是多GPU但不是通过torchrun启动的，不要用DataParallel
+        # （单模型架构用DataParallel会破坏梯度）
+        # 正确的多GPU方式是用torchrun启动DDP
+        import torch.distributed as dist
+        if not dist.is_initialized():
+            # 没有用torchrun，不要包装
+            return model
+        
+        # 让父类处理DDP包装
+        return super()._wrap_model(model, training, dataloader)
+    
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
         重写损失计算，应用动态掩码和KL散度
