@@ -66,8 +66,24 @@ def process_text_files(data_dir, output_file, tokenizer, max_length=512, min_len
                 continue
                 
             # 1. 先全部转为 Token ID (不加特殊token，纯内容)
-            # 注意：对于超大文件，可能需要分块读，但一般小说几MB内存扛得住
-            input_ids = tokenizer.encode(content, add_special_tokens=False)
+            # 为了防止 token indices sequence length warning/error，
+            # 我们不使用 tokenizer.encode 处理整个大文件，而是手动分块或者设置 truncation=False (但encode默认不truncate)
+            # 不过 tokenizer.encode 对超长文本可能会报 warning。
+            # 我们可以使用 tokenizer.__call__ 并且 verbose=False 来抑制警告，或者直接忽略。
+            # Qwen 的 tokenizer 最大长度很大，但几十万字的文本直接 encode 确实可能触发警告。
+            
+            # 这里的 encode 只是为了拿 ID 列表用于切分，不涉及模型 Forward，所以长度超限没关系。
+            # 我们通过 disable tracer warning 或者 simply ignore it.
+            # 更好的做法是：分块读取并 encode，然后拼起来。
+            
+            chunks = []
+            chunk_size_char = 100000 # 每次读10万字符 encode 一次，避免一次性 encode 太长
+            for i in range(0, len(content), chunk_size_char):
+                substring = content[i : i + chunk_size_char]
+                ids = tokenizer.encode(substring, add_special_tokens=False)
+                chunks.extend(ids)
+            
+            input_ids = chunks
             total_tokens += len(input_ids)
             
             # 2. Token 级滑动窗口
