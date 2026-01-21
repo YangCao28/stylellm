@@ -94,9 +94,20 @@ def setup_training(config: Config):
     # 2. 处理数据
     print(f"\n2. 处理数据...")
     
+    # 检查是否需要重新处理数据
+    need_process = False
     if not os.path.exists(config.data.processed_data_file):
-        print(f"处理原始数据: {config.data.data_dir}")
-        
+        need_process = True
+        print(f"处理原始数据: {config.data.data_dir}（文件不存在）")
+    else:
+        # 检查文件是否为空
+        if os.path.getsize(config.data.processed_data_file) == 0:
+            need_process = True
+            print(f"处理原始数据: {config.data.data_dir}（文件为空，重新处理）")
+        else:
+            print(f"使用已处理的数据: {config.data.processed_data_file}")
+    
+    if need_process:
         processor = WuxiaDataProcessor(
             tokenizer=tokenizer,
             max_length=config.data.max_length,
@@ -112,8 +123,6 @@ def setup_training(config: Config):
         )
         
         print(f"处理完成，共 {len(chunks)} 个文本块")
-    else:
-        print(f"使用已处理的数据: {config.data.processed_data_file}")
     
     # 3. 加载数据集
     print(f"\n3. 加载数据集...")
