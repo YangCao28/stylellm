@@ -32,8 +32,12 @@ class StyleAlignmentModel(nn.Module):
         
         self.kl_beta = kl_beta
         
+        # 记录目标设备
+        self.policy_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.reference_device = torch.device("cuda:1" if torch.cuda.device_count() > 1 else "cuda:0" if torch.cuda.is_available() else "cpu")
+        
         # 加载训练模型 (Policy Model) - 放在GPU 0
-        print(f"Loading policy model from {model_name} to GPU 0...")
+        print(f"Loading policy model from {model_name} to {self.policy_device}...")
         self.policy_model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float16,
@@ -137,10 +141,9 @@ class StyleAlignmentModel(nn.Module):
         # 计算KL散度
         if self.kl_beta > 0:
             with torch.no_grad():
-                # 将输入移到reference model所在的设备（GPU 1）
-                ref_device = next(self.reference_model.parameters()).device
-                ref_input_ids = masked_input_ids.to(ref_device)
-                ref_attention_mask = attention_mask.to(ref_device) if attention_mask is not None else None
+                # 将输入移到reference model所在的设备
+                ref_input_ids = masked_input_ids.to(self.reference_device)
+                ref_attention_mask = attention_mask.to(self.reference_device) if attention_mask is not None else None
                 
                 # Reference model前向传播（不计算梯度）
                 reference_outputs = self.reference_model(
@@ -148,7 +151,7 @@ class StyleAlignmentModel(nn.Module):
                     attention_mask=ref_attention_mask,
                 )
                 
-                # 将reference logits移回到policy model的设备（GPU 0）
+                # 将reference logits移回到policy model的设备
                 reference_logits = reference_outputs.logits.to(policy_outputs.logits.device)
             
             # 计算KL散度
