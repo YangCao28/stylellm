@@ -174,8 +174,27 @@ def train(config_file):
     
     print(f"训练模式: {'DDP' if is_ddp else 'Single GPU'}")
     print(f"设备数: {world_size}")
-    print(f"有效Batch Size: {cfg.training.per_device_train_batch_size * cfg.training.gradient_accumulation_steps * world_size}")
     
+    # 强制禁用缓存 (训练时必须禁用)
+    model.model.config.use_cache = False
+    
+    # 显式控制梯度检查点
+    if cfg.training.gradient_checkpointing:
+        print("启用梯度检查点 (Gradient Checkpointing)")
+        model.model.gradient_checkpointing_enable()
+    else:
+        print("禁用梯度检查点 (Gradient Checkpointing)")
+        if hasattr(model.model, "gradient_checkpointing_disable"):
+            model.model.gradient_checkpointing_disable()
+        model.model.config.gradient_checkpointing = False
+
+    effective_batch_size = cfg.training.per_device_train_batch_size * cfg.training.gradient_accumulation_steps * world_size
+    print(f"有效Batch Size: {effective_batch_size}")
+    
+    # 强制 Windows 下使用单进程加载数据
+    dataloader_num_workers = 0 if os.name == 'nt' else 4
+    print(f"Dataloader Workers: {dataloader_num_workers}")
+
     training_args = TrainingArguments(
         output_dir=cfg.training.output_dir,
         num_train_epochs=cfg.training.num_train_epochs,
@@ -200,6 +219,7 @@ def train(config_file):
         report_to=["tensorboard"],
         logging_dir=f"{cfg.training.output_dir}/logs",
         ddp_find_unused_parameters=False,
+        dataloader_num_workers=dataloader_num_workers, # 显式设置
     )
     
     # 9. Trainer
