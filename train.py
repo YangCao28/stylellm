@@ -188,7 +188,7 @@ def train(config_file):
         fp16=cfg.training.fp16,
         bf16=getattr(cfg.training, 'bf16', False),
         gradient_checkpointing=cfg.training.gradient_checkpointing,
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         save_strategy="steps",
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
