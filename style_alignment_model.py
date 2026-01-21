@@ -132,27 +132,36 @@ class StyleAlignmentModel(nn.Module):
         rec_loss = policy_outputs.loss
         
         # 计算KL散度（单模型：临时禁用LoRA获得参考分布）
-        if self.kl_beta > 0 and hasattr(self.policy_model, "disable_adapters"):
-            # 禁用LoRA适配器
-            self.policy_model.disable_adapters()
-            
-            # 同一模型前向，仅获取参考logits并断开梯度
-            with torch.no_grad():
-                reference_outputs = self.policy_model(
-                    input_ids=masked_input_ids,
-                    attention_mask=attention_mask,
+        # 只有在有LoRA且kl_beta>0时才计算KL
+        has_peft_adapters = (hasattr(self.policy_model, "peft_config") and 
+                            self.policy_model.peft_config is not None and
+                            len(self.policy_model.peft_config) > 0)
+        
+        if self.kl_beta > 0 and has_peft_adapters:
+            try:
+                # 禁用LoRA适配器
+                self.policy_model.disable_adapters()
+                
+                # 同一模型前向，仅获取参考logits并断开梯度
+                with torch.no_grad():
+                    reference_outputs = self.policy_model(
+                        input_ids=masked_input_ids,
+                        attention_mask=attention_mask,
+                    )
+                    reference_logits = reference_outputs.logits
+                
+                # 恢复LoRA适配器
+                self.policy_model.enable_adapters()
+                
+                # 计算KL散度
+                kl_loss = self._compute_kl_divergence(
+                    policy_logits=policy_outputs.logits,
+                    reference_logits=reference_logits,
+                    mask_positions=mask_positions,
                 )
-                reference_logits = reference_outputs.logits
-            
-            # 恢复LoRA适配器
-            self.policy_model.enable_adapters()
-            
-            # 计算KL散度
-            kl_loss = self._compute_kl_divergence(
-                policy_logits=policy_outputs.logits,
-                reference_logits=reference_logits,
-                mask_positions=mask_positions,
-            )
+            except (ValueError, AttributeError) as e:
+                # 如果adapter操作失败，跳过KL计算
+                kl_loss = torch.tensor(0.0, device=rec_loss.device)
         else:
             kl_loss = torch.tensor(0.0, device=rec_loss.device)
         
