@@ -170,12 +170,21 @@ class WuxiaDataProcessor:
             处理后的数据列表，每条数据包含{'text': ...}
         """
         data_path = Path(data_dir)
-        txt_files = list(data_path.rglob("*.txt"))
+        # 同时匹配 .txt 和 .TXT（大小写不敏感）
+        txt_files_lower = list(data_path.rglob("*.txt"))
+        txt_files_upper = list(data_path.rglob("*.TXT"))
+        txt_files = txt_files_lower + txt_files_upper
         
         if max_files:
             txt_files = txt_files[:max_files]
         
         print(f"Found {len(txt_files)} txt files in {data_dir}")
+        
+        if len(txt_files) == 0:
+            raise FileNotFoundError(
+                f"在 {data_dir} 目录下没有找到任何.txt文件\n"
+                f"请确保数据文件已上传到该目录"
+            )
         
         all_chunks = []
         processed_files = 0

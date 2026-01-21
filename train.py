@@ -117,6 +117,21 @@ def setup_training(config: Config):
     
     # 3. 加载数据集
     print(f"\n3. 加载数据集...")
+    if not os.path.exists(config.data.processed_data_file):
+        raise FileNotFoundError(
+            f"处理后的数据文件不存在: {config.data.processed_data_file}\n"
+            f"请确保 {config.data.data_dir} 目录下有txt文件"
+        )
+    
+    # 检查文件是否为空
+    with open(config.data.processed_data_file, 'r', encoding='utf-8') as f:
+        first_line = f.readline().strip()
+        if not first_line:
+            raise ValueError(
+                f"处理后的数据文件为空: {config.data.processed_data_file}\n"
+                f"请检查 {config.data.data_dir} 目录下是否有有效的txt文件"
+            )
+    
     dataset = load_dataset('json', data_files=config.data.processed_data_file, split='train')
     print(f"数据集大小: {len(dataset)}")
     

@@ -15,7 +15,7 @@ def quick_test():
     
     # 创建简化配置
     config = Config()
-    config.model.model_name_or_path = "gpt2"  # 使用小模型
+    config.model.model_name_or_path = "Qwen/Qwen3-8B"  # 使用Qwen3-8B
     config.training.num_train_epochs = 1
     config.training.per_device_train_batch_size = 1
     config.training.max_steps = 10  # 只训练10步
