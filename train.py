@@ -153,7 +153,15 @@ def train(config_file):
         print(f"调整词表: {model.model.config.vocab_size} -> {len(tokenizer)}")
     
     # 7. Span Masking Collator (动态掩码)
-    data_coll (DDP优化)
+    data_collator = SpanMaskingCollator(
+        tokenizer=tokenizer,
+        mask_ratio=0.15,      # 15% token被mask
+        span_ratio=0.5,       # 50% 使用span mask
+        span_length=(3, 5),   # span长度3-5
+    )
+    print("使用动态Span Masking策略")
+    
+    # 8. 训练参数 (DDP优化)
     print(f"\n5. 配置训练...")
     
     # 检测是否在DDP模式

@@ -3,7 +3,7 @@
 # ========================================
 
 model:
-  model_name_or_path: "Qwen/Qwen2.5-1.5B"  # 轻量模型，快速测试
+  model_name_or_path: "Qwen/Qwen2.5-3B"  # 3B模型，快速测试
   
   use_lora: true
   lora_r: 8              # 降低rank加快测试
