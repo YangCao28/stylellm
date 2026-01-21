@@ -64,16 +64,28 @@ class WuxiaDataProcessor:
         # 去除空白字符
         text = text.strip()
         
-        # 检查是否包含现代词汇
-        for keyword in self.MODERN_KEYWORDS:
-            if keyword in text:
-                return None
+        # 去除标题行和页眉页脚（通常包含"标题"、"<<"等）
+        lines = text.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            line = line.strip()
+            # 跳过太短的行、标题行
+            if len(line) < 3:
+                continue
+            if any(kw in line for kw in ['标题', '<<', '>>', '――', '===', '---', '第一章', '第二章', '第三章']):
+                continue
+            cleaned_lines.append(line)
+        
+        if not cleaned_lines:
+            return None
+        
+        text = ' '.join(cleaned_lines)
         
         # 去除多余的空格和换行
         text = re.sub(r'\s+', ' ', text)
         
-        # 去除特殊符号（保留基本标点）
-        text = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9，。！？；：、""''《》\(\)（）\[\]【】…—\-\s]', '', text)
+        # 去除一些明显的垃圾字符，但保留大部分标点
+        text = re.sub(r'[�\x00-\x1f\x7f-\x9f]', '', text)
         
         # 去除重复的标点
         text = re.sub(r'([，。！？；：])\1+', r'\1', text)

@@ -239,7 +239,7 @@ def train(config: Config):
         save_strategy=config.training.save_strategy,
         save_steps=config.training.save_steps,
         save_total_limit=config.training.save_total_limit,
-        evaluation_strategy=config.training.eval_strategy,
+        eval_strategy=config.training.eval_strategy,
         eval_steps=config.training.eval_steps,
         fp16=config.training.fp16,
         bf16=config.training.bf16,
