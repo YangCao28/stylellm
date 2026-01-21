@@ -54,9 +54,11 @@ class StyleAlignmentModel(nn.Module):
         self.reference_model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float16,
-            device_map={"": 1},  # 强制放在GPU 1
             trust_remote_code=True,
         )
+        
+        # 显式移动到GPU 1（device_map可能不可靠）
+        self.reference_model = self.reference_model.to(self.reference_device)
         
         # 冻结参考模型
         for param in self.reference_model.parameters():
