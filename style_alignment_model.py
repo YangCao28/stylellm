@@ -49,15 +49,29 @@ class StyleAlignmentModel(nn.Module):
         if use_lora:
             self._apply_lora(lora_config or self._default_lora_config())
         
-        # 创建参考模型 (Reference Model) - 放在GPU 1
+        # 创建参考模型 (Reference Model) - 先加载到CPU，再移到GPU 1
         print("Creating frozen reference model on GPU 1...")
+        
+        # 临时设置环境变量，防止自动加载到GPU 0
+        import os
+        original_cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES', None)
+        os.environ['CUDA_VISIBLE_DEVICES'] = ''  # 强制加载到CPU
+        
         self.reference_model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float16,
             trust_remote_code=True,
+            low_cpu_mem_usage=True,
         )
         
-        # 显式移动到GPU 1（device_map可能不可靠）
+        # 恢复环境变量
+        if original_cuda_visible is not None:
+            os.environ['CUDA_VISIBLE_DEVICES'] = original_cuda_visible
+        else:
+            os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+        
+        # 显式移动到GPU 1
+        print(f"Moving reference model to {self.reference_device}...")
         self.reference_model = self.reference_model.to(self.reference_device)
         
         # 冻结参考模型
