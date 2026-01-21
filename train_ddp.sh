@@ -26,8 +26,8 @@ torchrun \
     --nproc_per_node=2 \
     --master_port=29500 \
     train.py \
-    --config train_config.yaml
+    --config train_config_full.yaml
 
 echo ""
 echo "✓ 训练完成！"
-echo "模型保存位置: ./output/wuxia_lora"
+echo "模型保存位置: ./output/full_run"

@@ -1,0 +1,52 @@
+# ========================================
+# 全量训练配置 - 双卡 DDP - Qwen3-4B
+# ========================================
+
+model:
+  model_name_or_path: "Qwen/Qwen3-4B"
+  
+  use_lora: true
+  lora_r: 32             # 增加 rank 以提升学习能力
+  lora_alpha: 64
+  lora_dropout: 0.05
+  lora_target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+data:
+  data_dir: "./data"
+  processed_data_file: "./data/processed_full.jsonl" # 区分于测试数据
+  max_length: 1024       # 增加长度，适合小说创作
+  min_length: 100
+  stride: 512
+  val_ratio: 0.05        # 减少验证集比例，多用来训练
+
+training:
+  output_dir: "./output/full_run"
+  
+  num_train_epochs: 3
+  
+  # 显存优化策略 (2x RTX 4090 24GB)
+  # 目标: 避免使用 Gradient Checkpointing (防止死锁)，同时最大化利用显存
+  per_device_train_batch_size: 1      # 如果显存充足，可以尝试改为 2
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 16     # 有效Batch = 1 * 2(卡) * 16 = 32
+  
+  learning_rate: 2.0e-5               # 全量训练稍微降低 LR
+  weight_decay: 0.01
+  warmup_steps: 100
+  
+  logging_steps: 10
+  save_steps: 500
+  eval_steps: 500
+  save_total_limit: 3
+  
+  fp16: false
+  bf16: true                          # 推荐使用 bf16
+  gradient_checkpointing: false       # 保持关闭以避免死锁/兼容性问题
+  seed: 42

@@ -18,9 +18,9 @@ model:
 data:
   data_dir: "./data"
   processed_data_file: "./data/processed_wuxia.jsonl"
-  max_length: 512        # 降低长度加快测试
+  max_length: 256        # 进一步降低长度防止OOM
   min_length: 50
-  stride: 256
+  stride: 128
   val_ratio: 0.1
 
 training:
@@ -29,19 +29,19 @@ training:
   # 单卡测试配置（降低显存占用）
   num_train_epochs: 1              # 只跑1个epoch测试
   per_device_train_batch_size: 1   # 降低到1
-  per_device_eval_batch_size: 2
-  gradient_accumulation_steps: 1   # 暂时改为1，以便立即看到进度条移动
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1   # 暂时改为1
   
   learning_rate: 5.0e-5
   weight_decay: 0.01
   warmup_steps: 50
   
-  logging_steps: 1                 # 每一步都打印日志，确认是否卡死
+  logging_steps: 1                 # 每一步都打印日志
   save_steps: 100
   eval_steps: 100
   save_total_limit: 2
   
-  fp16: true
-  bf16: false
-  gradient_checkpointing: true     # 重新开启节省显存
+  fp16: false                      # 关闭fp16
+  bf16: true                       # 开启bf16 (4090支持更好)
+  gradient_checkpointing: false    # 必须关闭防止卡死，通过降低 max_length 解决 OOM
   seed: 42

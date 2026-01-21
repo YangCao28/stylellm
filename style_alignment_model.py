@@ -34,7 +34,7 @@ class StyleAlignmentModel(nn.Module):
         print(f"Loading model from {model_name_or_path} to {device}...")
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path,
-            torch_dtype=torch.float16,
+            torch_dtype=torch.bfloat16,  # RTX 4090 推荐使用 bf16
             device_map=device,
             trust_remote_code=True,
             low_cpu_mem_usage=True, # 优化加载内存
