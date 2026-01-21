@@ -203,13 +203,15 @@ def train(config_file):
         if 'lora' in name.lower():
             param.requires_grad = True
     
-    # 7. Data Collator (使用标准的语言模型collator)
-    from transformers import DataCollatorForLanguageModeling
-    data_collator = DataCollatorForLanguageModeling(
+    # 7. Data Collator (切换为 Span Masking)
+    from span_masking import SpanMaskingCollator
+    data_collator = SpanMaskingCollator(
         tokenizer=tokenizer,
-        mlm=False,  # Causal LM，不用MLM
+        mask_ratio=0.15,      # 15% 的内容被遮盖
+        span_ratio=0.5,       # 其中 50% 是连续片段
+        span_length=(3, 8),   # 片段长度 3-8 个 token (涵盖成语/短句)
     )
-    print("使用标准 Causal LM 训练")
+    print("使用 Span Masking 训练 (武侠风格强化)")
     
     # 8. 训练参数 (DDP优化)
     print(f"\n5. 配置训练...")

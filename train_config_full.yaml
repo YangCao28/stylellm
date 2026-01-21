@@ -20,7 +20,7 @@ model:
 
 data:
   data_dir: "./data"
-  processed_data_file: "./data/processed_full.jsonl" # 区分于测试数据
+  processed_data_file: "./data/processed_full_v2.jsonl" # 改名强制重新生成
   max_length: 1024       # 增加长度，适合小说创作
   min_length: 100
   stride: 512
