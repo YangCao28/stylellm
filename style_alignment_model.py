@@ -84,12 +84,17 @@ class StyleAlignmentModel(nn.Module):
             del self._modules['reference_model']
         
         # 验证所有参数的设备
-        ref_devices = set(p.device for p in self.reference_model.parameters())
+        ref_devices = set(p.device for p in self._reference_model.parameters())
         print(f"Policy model device: {next(self.policy_model.parameters()).device}")
         print(f"Reference model devices: {ref_devices}")
         
         if len(ref_devices) > 1:
             print("WARNING: Reference model parameters on multiple devices!")
+        else:
+            # 断言参考模型全部在目标设备
+            only_device = next(iter(ref_devices))
+            assert only_device == self.reference_device, (
+                f"Reference model is on {only_device}, expected {self.reference_device}")
         
         print(f"Dual-model framework initialized (Policy on {self.policy_device}, Reference on {self.reference_device}).")
     
