@@ -1,0 +1,20 @@
+# 核心依赖
+torch>=2.0.0
+transformers>=4.35.0
+datasets>=2.14.0
+accelerate>=0.24.0
+peft>=0.6.0
+sentencepiece>=0.1.99
+protobuf>=3.20.0
+numpy>=1.24.0
+tqdm>=4.65.0
+tensorboard>=2.14.0
+pyyaml>=6.0
+
+# GPU工具
+nvidia-ml-py3>=7.352.0  # nvidia-smi Python接口
+
+# 可选依赖（根据需要安装）
+# flash-attn>=2.3.0  # 需要从源码编译，安装复杂，注释掉
+# bitsandbytes>=0.41.0  # 用于量化（Windows支持有限）
+# llamafactory  # LLaMA-Factory集成

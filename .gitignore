@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# 训练输出
+output/
+checkpoints/
+runs/
+logs/
+*.log
+
+# 数据文件（武侠小说txt太大，不上传）
+data/*.txt
+data/**/*.txt
+processed_*.jsonl
+*.pt
+*.bin
+*.safetensors
+
+# 模型文件（太大）
+models/
+*.pth
+*.pth
+*.bin
+*.safetensors
+
+# 模型文件（太大）
+models/
+*.model
+*.ckpt
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# TensorBoard
+events.out.tfevents.*
