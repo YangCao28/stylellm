@@ -152,14 +152,18 @@ def train(config_file):
         model.model.resize_token_embeddings(len(tokenizer))
         print(f"调整词表: {model.model.config.vocab_size} -> {len(tokenizer)}")
     
-    # 7. Span Masking Collator (动态掩码)
-    data_collator = SpanMaskingCollator(
+    # 确保LoRA参数可训练
+    for name, param in model.model.named_parameters():
+        if 'lora' in name.lower():
+            param.requires_grad = True
+    
+    # 7. Data Collator (使用标准的语言模型collator)
+    from transformers import DataCollatorForLanguageModeling
+    data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
-        mask_ratio=0.15,      # 15% token被mask
-        span_ratio=0.5,       # 50% 使用span mask
-        span_length=(3, 5),   # span长度3-5
+        mlm=False,  # Causal LM，不用MLM
     )
-    print("使用动态Span Masking策略")
+    print("使用标准 Causal LM 训练")
     
     # 8. 训练参数 (DDP优化)
     print(f"\n5. 配置训练...")
