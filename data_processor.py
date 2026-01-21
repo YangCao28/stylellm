@@ -145,10 +145,13 @@ class WuxiaDataProcessor:
         # 清洗文本
         cleaned = self.clean_text(content)
         if not cleaned:
+            print(f"  ⚠️ 清洗后内容为空: {Path(file_path).name}")
             return []
         
         # 切分文本
         chunks = self.split_into_chunks(cleaned)
+        if not chunks:
+            print(f"  ⚠️ 切分后无有效块（可能太短，min_length={self.min_length}）: {Path(file_path).name}")
         
         return chunks
     
@@ -188,6 +191,7 @@ class WuxiaDataProcessor:
         
         all_chunks = []
         processed_files = 0
+        failed_files = []
         
         for txt_file in txt_files:
             chunks = self.process_file(str(txt_file))
@@ -198,6 +202,9 @@ class WuxiaDataProcessor:
                 
                 if processed_files % 10 == 0:
                     print(f"Processed {processed_files}/{len(txt_files)} files, got {len(all_chunks)} chunks")
+            else:
+                failed_files.append(txt_file.name)
+                print(f"⚠️ 文件处理失败（内容为空或太短）: {txt_file.name}")
         
         print(f"\nTotal: {len(all_chunks)} chunks from {processed_files} files")
         

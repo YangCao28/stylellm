@@ -74,7 +74,7 @@ class DataConfig:
     
     # 数据处理参数
     max_length: int = 512  # 最大序列长度
-    min_length: int = 64  # 最小序列长度
+    min_length: int = 32  # 最小序列长度（字符数）
     stride: int = 256  # 滑动窗口步长
     val_ratio: float = 0.05  # 验证集比例
     max_files: Optional[int] = None  # 最大处理文件数（None表示全部）

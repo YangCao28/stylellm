@@ -1,0 +1,127 @@
+"""
+批量转换文件编码为UTF-8
+解决武侠小说文件GB2312/GBK乱码问题
+"""
+import sys
+from pathlib import Path
+import chardet
+
+# 添加父目录到路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
+def detect_encoding(file_path):
+    """检测文件编码"""
+    with open(file_path, 'rb') as f:
+        raw_data = f.read()
+        result = chardet.detect(raw_data)
+        return result['encoding'], result['confidence']
+
+
+def convert_to_utf8(file_path, backup=True):
+    """
+    将文件转换为UTF-8编码
+    
+    Args:
+        file_path: 文件路径
+        backup: 是否备份原文件
+    """
+    try:
+        # 检测原始编码
+        encoding, confidence = detect_encoding(file_path)
+        
+        if encoding is None:
+            print(f"⚠️ 无法检测编码: {file_path.name}")
+            return False
+        
+        # 如果已经是UTF-8，跳过
+        if encoding.lower() in ['utf-8', 'ascii']:
+            print(f"✓ 已是UTF-8: {file_path.name}")
+            return True
+        
+        print(f"🔄 转换 {file_path.name}: {encoding} (置信度: {confidence:.2f}) -> UTF-8")
+        
+        # 读取原始内容
+        with open(file_path, 'r', encoding=encoding, errors='ignore') as f:
+            content = f.read()
+        
+        # 备份原文件
+        if backup:
+            backup_path = file_path.with_suffix(file_path.suffix + '.bak')
+            with open(backup_path, 'wb') as f:
+                with open(file_path, 'rb') as src:
+                    f.write(src.read())
+        
+        # 写入UTF-8
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        print(f"✅ 转换成功: {file_path.name}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ 转换失败 {file_path.name}: {e}")
+        return False
+
+
+def convert_directory(data_dir, backup=True):
+    """
+    转换目录下所有txt文件
+    
+    Args:
+        data_dir: 数据目录
+        backup: 是否备份
+    """
+    data_path = Path(data_dir)
+    
+    # 查找所有txt文件（包括.txt和.TXT）
+    txt_files_lower = list(data_path.rglob("*.txt"))
+    txt_files_upper = list(data_path.rglob("*.TXT"))
+    txt_files = txt_files_lower + txt_files_upper
+    
+    if not txt_files:
+        print(f"⚠️ 在 {data_dir} 中没有找到txt文件")
+        return
+    
+    print(f"找到 {len(txt_files)} 个txt文件")
+    print("="*60)
+    
+    success_count = 0
+    fail_count = 0
+    
+    for txt_file in txt_files:
+        if convert_to_utf8(txt_file, backup=backup):
+            success_count += 1
+        else:
+            fail_count += 1
+    
+    print("="*60)
+    print(f"\n转换完成:")
+    print(f"  ✅ 成功: {success_count}")
+    print(f"  ❌ 失败: {fail_count}")
+    
+    if backup:
+        print(f"\n原文件已备份为 .bak 文件")
+        print(f"确认无误后可删除: find {data_dir} -name '*.bak' -delete")
+
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='批量转换文件编码为UTF-8')
+    parser.add_argument('--data-dir', type=str, default='./data', 
+                        help='数据目录路径')
+    parser.add_argument('--no-backup', action='store_true',
+                        help='不备份原文件（谨慎使用）')
+    
+    args = parser.parse_args()
+    
+    print("="*60)
+    print("文件编码转换工具")
+    print("="*60)
+    print(f"数据目录: {args.data_dir}")
+    print(f"备份原文件: {'否' if args.no_backup else '是'}")
+    print("="*60)
+    print()
+    
+    convert_directory(args.data_dir, backup=not args.no_backup)

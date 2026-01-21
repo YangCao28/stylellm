@@ -20,6 +20,7 @@ def quick_test():
     config.training.per_device_train_batch_size = 1
     config.training.max_steps = 10  # 只训练10步
     config.data.max_files = 5  # 只使用5个文件
+    config.data.min_length = 10  # 测试时降低最小长度
     
     print("配置:")
     print(f"  模型: {config.model.model_name_or_path}")
