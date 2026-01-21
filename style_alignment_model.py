@@ -32,9 +32,11 @@ class StyleAlignmentModel(nn.Module):
         
         self.kl_beta = kl_beta
         
-        # 记录目标设备
+        # 设备配置 - Policy在GPU 0，Reference在GPU 1
         self.policy_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.reference_device = torch.device("cuda:1" if torch.cuda.device_count() > 1 else "cuda:0" if torch.cuda.is_available() else "cpu")
+        self.reference_device = torch.device("cuda:1" if torch.cuda.device_count() > 1 else self.policy_device)
+        
+        print(f"Dual-GPU mode: Policy on {self.policy_device}, Reference on {self.reference_device}")
         
         # 加载训练模型 (Policy Model) - 放在GPU 0
         print(f"Loading policy model from {model_name} to {self.policy_device}...")
@@ -49,30 +51,25 @@ class StyleAlignmentModel(nn.Module):
         if use_lora:
             self._apply_lora(lora_config or self._default_lora_config())
         
-        # 创建参考模型 (Reference Model) - 先加载到CPU，再移到GPU 1
-        print("Creating frozen reference model on GPU 1...")
+        # 创建参考模型 (Reference Model) - 直接加载到目标GPU
+        print(f"Loading frozen reference model to {self.reference_device}...")
         
-        # 临时设置环境变量，防止自动加载到GPU 0
-        import os
-        original_cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES', None)
-        os.environ['CUDA_VISIBLE_DEVICES'] = ''  # 强制加载到CPU
-        
-        self.reference_model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.float16,
-            trust_remote_code=True,
-            low_cpu_mem_usage=True,
-        )
-        
-        # 恢复环境变量
-        if original_cuda_visible is not None:
-            os.environ['CUDA_VISIBLE_DEVICES'] = original_cuda_visible
+        if self.reference_device != self.policy_device:
+            # 双GPU模式：直接指定device_map到GPU 1
+            self.reference_model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=torch.float16,
+                device_map={"":  int(str(self.reference_device).split(':')[1])},  # 提取GPU编号
+                trust_remote_code=True,
+            )
         else:
-            os.environ.pop('CUDA_VISIBLE_DEVICES', None)
-        
-        # 显式移动到GPU 1
-        print(f"Moving reference model to {self.reference_device}...")
-        self.reference_model = self.reference_model.to(self.reference_device)
+            # 单GPU模式：共享GPU 0
+            self.reference_model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=torch.float16,
+                device_map={"":  0},
+                trust_remote_code=True,
+            )
         
         # 冻结参考模型
         for param in self.reference_model.parameters():
