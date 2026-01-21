@@ -60,9 +60,12 @@ training:
   lr_scheduler_type: "cosine"   # 学习率调度器 (linear/cosine/constant)
   
   # 风格对齐核心参数 (重要!)
-  kl_beta: 0.1                  # KL散度权重 - 标准配置
-                                # 轻度: 0.08，强风格: 0.15-0.2
-  # kl_beta调优：
+  # 两阶段训练策略：
+  #   阶段1: kl_beta=0 (纯LoRA微调，学武侠风格)
+  #   阶段2: kl_beta=0.1 (加载checkpoint，KL保持通顺)
+  kl_beta: 0                    # 阶段1：禁用KL，纯微调
+                                # 阶段2改为: 0.08-0.15
+  # kl_beta调优（阶段2使用）：
   #   - 风格不明显 → 降低到0.05
   #   - 输出不通顺 → 提高到0.15-0.2
   
