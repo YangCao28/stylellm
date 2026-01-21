@@ -1,5 +1,5 @@
 """
-超简化训练脚本 - 无依赖版本
+极简双卡DDP训练 - 纯掩码还原
 """
 
 import os
@@ -10,10 +10,10 @@ from transformers import (
     AutoTokenizer,
     TrainingArguments,
     Trainer,
-    DataCollatorForLanguageModeling,
 )
 from datasets import load_dataset
 from style_alignment_model import StyleAlignmentModel
+from span_masking import SpanMaskingCollator
 
 
 def load_config(config_file):
@@ -86,6 +86,12 @@ def train(config_file):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
+    # 添加[MASK] token
+    if tokenizer.mask_token is None:
+        special_tokens = {'mask_token': '[MASK]'}
+        tokenizer.add_special_tokens(special_tokens)
+        print(f"添加 [MASK] token")
+    
     # 2. 处理数据
     print(f"\n2. 准备数据...")
     
@@ -141,14 +147,23 @@ def train(config_file):
         device="cuda:0",
     )
     
-    # 7. Data collator
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False,
-    )
+    # 如果添加了新token，调整embedding
+    if len(tokenizer) > model.model.config.vocab_size:
+        model.model.resize_token_embeddings(len(tokenizer))
+        print(f"调整词表: {model.model.config.vocab_size} -> {len(tokenizer)}")
     
-    # 8. 训练参数
+    # 7. Span Masking Collator (动态掩码)
+    data_coll (DDP优化)
     print(f"\n5. 配置训练...")
+    
+    # 检测是否在DDP模式
+    is_ddp = torch.distributed.is_initialized()
+    world_size = torch.distributed.get_world_size() if is_ddp else 1
+    
+    print(f"训练模式: {'DDP' if is_ddp else 'Single GPU'}")
+    print(f"设备数: {world_size}")
+    print(f"有效Batch Size: {cfg.training.per_device_train_batch_size * cfg.training.gradient_accumulation_steps * world_size}")
+    
     training_args = TrainingArguments(
         output_dir=cfg.training.output_dir,
         num_train_epochs=cfg.training.num_train_epochs,
@@ -162,6 +177,16 @@ def train(config_file):
         save_steps=cfg.training.save_steps,
         eval_steps=cfg.training.eval_steps,
         save_total_limit=cfg.training.save_total_limit,
+        fp16=cfg.training.fp16,
+        bf16=cfg.training.get('bf16', False),
+        gradient_checkpointing=cfg.training.gradient_checkpointing,
+        evaluation_strategy="steps",
+        save_strategy="steps",
+        load_best_model_at_end=True,
+        report_to=["tensorboard"],
+        logging_dir=f"{cfg.training.output_dir}/logs",
+        ddp_find_unused_parameters=False,
+        ddp_backend="nccl" if is_ddp else Nonave_total_limit,
         fp16=cfg.training.fp16,
         gradient_checkpointing=cfg.training.gradient_checkpointing,
         evaluation_strategy="steps",

@@ -1,14 +1,16 @@
 # ========================================
-# 武侠风格 LoRA 微调 - 简化配置
+# 武侠风格 LoRA 微调 - 双卡DDP配置
+# 纯掩码还原，无KL散度
 # ========================================
 
 # ========================================
 # 1. 模型配置
 # ========================================
 model:
-  model_name_or_path: "Qwen/Qwen3-4B"
+  # 基座模型 (推荐Qwen3-8B，双卡跑得动)
+  model_name_or_path: "Qwen/Qwen3-8B"
   
-  # LoRA 配置
+  # LoRA 配置 (覆盖所有线性层，改变语感)
   use_lora: true
   lora_r: 16
   lora_alpha: 32
@@ -27,43 +29,44 @@ model:
 # 2. 数据配置
 # ========================================
 data:
-  # 数据目录
+  # 数据目录 (放武侠txt + 5-10%通用数据)
   data_dir: "./data"
   
   # 处理后的数据文件
   processed_data_file: "./data/processed_wuxia.jsonl"
   
   # 数据处理参数
-  max_length: 512
+  max_length: 1024      # 更长的上下文，学习完整段落
   min_length: 50
-  stride: 256
+  stride: 512
   val_ratio: 0.05
 
 
 # ========================================
-# 3. 训练配置
+# 3. 训练配置 (2×4090 DDP优化)
 # ========================================
 training:
-  output_dir: "./output/wuxia_model"
+  output_dir: "./output/wuxia_lora"
   
-  # 训练参数（2×4090 DDP优化）
-  num_train_epochs: 5
-  per_device_train_batch_size: 2
+  # 核心参数 (双卡配置)
+  num_train_epochs: 3
+  per_device_train_batch_size: 4    # 每卡4，双卡总batch=8
   per_device_eval_batch_size: 8
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 8     # 有效batch = 8×8 = 64
   
-  # 优化器参数
-  learning_rate: 0.0002
+  # 优化器 (稍大学习率，快速转换语感)
+  learning_rate: 5.0e-5              # 5e-5，比常规大一点
   weight_decay: 0.01
   warmup_steps: 100
   
   # 日志和保存
   logging_steps: 10
-  save_steps: 200
-  eval_steps: 200
+  save_steps: 500
+  eval_steps: 500
   save_total_limit: 3
   
-  # 高级选项
-  fp16: true
+  # 高级选项 (4090优化)
+  fp16: false
+  bf16: true                         # 4090必开bf16
   gradient_checkpointing: true
   seed: 42
