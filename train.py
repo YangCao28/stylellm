@@ -34,29 +34,47 @@ def load_config(config_file):
 
 
 def process_text_files(data_dir, output_file, tokenizer, max_length=512, min_length=50):
-    """处理文本文件"""
-    print(f"处理 {data_dir} 中的txt文件...")
+    """处理文本文件 - 滑动窗口切分"""
+    print(f"处理 {data_dir} 中的txt文件 (滑动窗口)...")
     
     import json
     from pathlib import Path
     
     texts = []
     
+    # 估算：1 token ≈ 1.5 中文字符. 保守起见用 2 chars/token 或 3 chars/token
+    # 如果 max_length=1024, chunk_size 可以设为 2000 字符
+    chunk_size = max_length * 2  
+    stride = int(chunk_size * 0.7)  # 30% 重叠
+    print(f"切分策略: Chunk Size={chunk_size} chars, Stride={stride} chars")
+
     # 递归查找所有txt文件
-    for txt_file in Path(data_dir).rglob("*.txt"):
+    files = list(Path(data_dir).rglob("*.txt"))
+    print(f"找到 {len(files)} 个文件")
+    
+    for txt_file in files:
         try:
-            with open(txt_file, 'r', encoding='utf-8') as f:
+            with open(txt_file, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
             
-            # 分段
-            paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
-            
-            for para in paragraphs:
-                if len(para) >= min_length:
-                    texts.append({
-                        'text': para,
-                        'source': str(txt_file.name)
-                    })
+            # 清理：统一换行符
+            content = content.replace('\r\n', '\n').strip()
+            if not content:
+                continue
+
+            # 滑动窗口切分
+            for i in range(0, len(content), stride):
+                segment = content[i : i + chunk_size]
+                
+                # 如果最后一段太短，就丢弃（除非是唯一的段）
+                if len(segment) < min_length and i > 0:
+                    continue
+                    
+                texts.append({
+                    'text': segment,
+                    'source': str(txt_file.name)
+                })
+                
         except Exception as e:
             print(f"跳过 {txt_file}: {e}")
     
@@ -72,6 +90,25 @@ def process_text_files(data_dir, output_file, tokenizer, max_length=512, min_len
 def train(config_file):
     """训练主函数"""
     
+    # 0. DDP 初始化检测
+    if "LOCAL_RANK" in os.environ:
+        try:
+            torch.distributed.init_process_group(backend="nccl")
+        except:
+            pass # 可能已经被初始化
+        local_rank = int(os.environ["LOCAL_RANK"])
+        world_size = int(os.environ["WORLD_SIZE"])
+        torch.cuda.set_device(local_rank)
+        device = f"cuda:{local_rank}"
+        is_ddp = True
+        print(f"[Init] DDP Enabled: Rank {local_rank}/{world_size}, Device {device}")
+    else:
+        local_rank = 0
+        world_size = 1
+        device = "cuda:0"
+        is_ddp = False
+        print(f"[Init] Single GPU Mode: Device {device}")
+
     # 加载配置
     print(f"加载配置: {config_file}")
     cfg = load_config(config_file)
@@ -92,11 +129,13 @@ def train(config_file):
         tokenizer.add_special_tokens(special_tokens)
         print(f"添加 [MASK] token")
     
-    # 2. 处理数据
+    # 2. 处理数据 (仅Rank 0进行)
     print(f"\n2. 准备数据...")
     
-    if not os.path.exists(cfg.data.processed_data_file) or \
-       os.path.getsize(cfg.data.processed_data_file) == 0:
+    should_process = not os.path.exists(cfg.data.processed_data_file) or \
+                     os.path.getsize(cfg.data.processed_data_file) == 0
+    
+    if local_rank == 0 and should_process:
         process_text_files(
             cfg.data.data_dir,
             cfg.data.processed_data_file,
@@ -104,8 +143,15 @@ def train(config_file):
             cfg.data.max_length,
             cfg.data.min_length
         )
-    else:
-        print(f"使用已处理数据: {cfg.data.processed_data_file}")
+    
+    # 等待 Rank 0 处理完成
+    if is_ddp:
+        torch.distributed.barrier()
+        
+    if local_rank != 0 and should_process:
+         print(f"Rank {local_rank} 等待数据处理完成...")
+
+    print(f"使用已处理数据: {cfg.data.processed_data_file}")
     
     # 3. 加载数据集
     print(f"\n3. 加载数据集...")
@@ -144,7 +190,7 @@ def train(config_file):
     model = StyleAlignmentModel(
         model_name_or_path=cfg.model.model_name_or_path,
         lora_config=lora_config,
-        device="cuda:0",
+        device=device,
     )
     
     # 如果添加了新token，调整embedding
@@ -168,10 +214,7 @@ def train(config_file):
     # 8. 训练参数 (DDP优化)
     print(f"\n5. 配置训练...")
     
-    # 检测是否在DDP模式
-    is_ddp = torch.distributed.is_initialized()
-    world_size = torch.distributed.get_world_size() if is_ddp else 1
-    
+    # (此时 world_size 已经在开头获取正确)
     print(f"训练模式: {'DDP' if is_ddp else 'Single GPU'}")
     print(f"设备数: {world_size}")
     
