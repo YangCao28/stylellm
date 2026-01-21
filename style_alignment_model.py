@@ -32,13 +32,12 @@ class StyleAlignmentModel(nn.Module):
         
         self.kl_beta = float(kl_beta)
         
-        # 设备配置 - Policy在GPU 0，Reference在GPU 1
+        # 设备配置
         self.policy_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.reference_device = torch.device("cuda:1" if torch.cuda.device_count() > 1 else self.policy_device)
         
-        print(f"Dual-GPU mode: Policy on {self.policy_device}, Reference on {self.reference_device}")
+        print(f"Single-model mode on {self.policy_device}")
         
-        # 加载训练模型 (Policy Model) - 放在GPU 0
+        # 加载训练模型 (Policy Model)
         print(f"Loading policy model from {model_name} to {self.policy_device}...")
         self.policy_model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -133,24 +132,20 @@ class StyleAlignmentModel(nn.Module):
         rec_loss = policy_outputs.loss
         
         # 计算KL散度（单模型：临时禁用LoRA获得参考分布）
-        if self.kl_beta > 0:
-            # 禁用LoRA适配器（如果存在）
-            if hasattr(self.policy_model, "disable_adapter"):
-                self.policy_model.disable_adapter()
-                lora_disabled = True
-            else:
-                lora_disabled = False
+        if self.kl_beta > 0 and hasattr(self.policy_model, "disable_adapter"):
+            # 禁用LoRA适配器
+            self.policy_model.disable_adapter()
             
             # 同一模型前向，仅获取参考logits并断开梯度
-            reference_outputs = self.policy_model(
-                input_ids=masked_input_ids,
-                attention_mask=attention_mask,
-            )
-            reference_logits = reference_outputs.logits.detach()
+            with torch.no_grad():
+                reference_outputs = self.policy_model(
+                    input_ids=masked_input_ids,
+                    attention_mask=attention_mask,
+                )
+                reference_logits = reference_outputs.logits
             
             # 恢复LoRA适配器
-            if lora_disabled and hasattr(self.policy_model, "enable_adapter"):
-                self.policy_model.enable_adapter()
+            self.policy_model.enable_adapter()
             
             # 计算KL散度
             kl_loss = self._compute_kl_divergence(
