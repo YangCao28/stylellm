@@ -186,7 +186,7 @@ def train(config_file):
         eval_steps=cfg.training.eval_steps,
         save_total_limit=cfg.training.save_total_limit,
         fp16=cfg.training.fp16,
-        bf16=cfg.training.get('bf16', False),
+        bf16=getattr(cfg.training, 'bf16', False),
         gradient_checkpointing=cfg.training.gradient_checkpointing,
         evaluation_strategy="steps",
         save_strategy="steps",
