@@ -1,0 +1,47 @@
+# ========================================
+# 单卡测试配置 - Qwen3-4B
+# ========================================
+
+model:
+  model_name_or_path: "Qwen/Qwen2.5-1.5B"  # 轻量模型，快速测试
+  
+  use_lora: true
+  lora_r: 8              # 降低rank加快测试
+  lora_alpha: 16
+  lora_dropout: 0.05
+  lora_target_modules:
+    - "q_proj"
+    - "v_proj"
+    - "k_proj"
+    - "o_proj"
+
+data:
+  data_dir: "./data"
+  processed_data_file: "./data/processed_wuxia.jsonl"
+  max_length: 512        # 降低长度加快测试
+  min_length: 50
+  stride: 256
+  val_ratio: 0.1
+
+training:
+  output_dir: "./output/test_run"
+  
+  # 单卡测试配置
+  num_train_epochs: 1              # 只跑1个epoch测试
+  per_device_train_batch_size: 4   # 单卡batch=4
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 4   # 有效batch=16
+  
+  learning_rate: 5.0e-5
+  weight_decay: 0.01
+  warmup_steps: 50
+  
+  logging_steps: 5
+  save_steps: 100
+  eval_steps: 100
+  save_total_limit: 2
+  
+  fp16: true             # Windows用fp16
+  bf16: false
+  gradient_checkpointing: true
+  seed: 42
