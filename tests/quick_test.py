@@ -15,7 +15,7 @@ def quick_test():
     
     # 创建简化配置
     config = Config()
-    config.model.model_name_or_path = "Qwen/Qwen3-8B"  # 使用Qwen3-8B
+    config.model.model_name_or_path = "Qwen/Qwen3-4B"  # 使用Qwen3-4B节省显存
     config.training.num_train_epochs = 1
     config.training.per_device_train_batch_size = 1
     config.training.gradient_accumulation_steps = 1  # 减少累积

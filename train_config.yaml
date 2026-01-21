@@ -8,17 +8,18 @@
 model:
   # 基座模型路径或HuggingFace模型名称
   # 常用模型：
-  #   - Qwen/Qwen3-8B (推荐，性能优秀)
-  #   - Qwen/Qwen2.5-1.5B (轻量级，显存友好)
+  #   - Qwen/Qwen3-4B (推荐，显存友好)
+  #   - Qwen/Qwen3-8B (高性能，需更多显存)
+  #   - Qwen/Qwen2.5-1.5B (轻量级)
   #   - meta-llama/Llama-3.1-8B (需申请)
   #   - 01-ai/Yi-1.5-9B (中文友好)
   #   - gpt2 (测试用)
-  model_name_or_path: "Qwen/Qwen3-8B"
+  model_name_or_path: "Qwen/Qwen3-4B"
   
   # 是否使用LoRA高效微调
   use_lora: true
   
-  # LoRA配置 (针对Qwen3-8B优化)
+  # LoRA配置 (针对Qwen3-4B优化)
   lora_r: 32              # LoRA rank - 高质量配置，追求最佳效果
                           # 标准配置用16，显存紧张(20GB)可用8
   lora_alpha: 64          # LoRA alpha (通常是rank的2倍)
