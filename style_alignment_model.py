@@ -75,6 +75,8 @@ class StyleAlignmentModel(nn.Module):
     
     def gradient_checkpointing_enable(self, gradient_checkpointing_kwargs=None):
         """启用梯度检查点"""
+        if hasattr(self.model, 'enable_input_require_grads'):
+            self.model.enable_input_require_grads()
         if hasattr(self.model, 'gradient_checkpointing_enable'):
             self.model.gradient_checkpointing_enable(gradient_checkpointing_kwargs)
     
