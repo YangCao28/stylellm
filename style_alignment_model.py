@@ -63,6 +63,9 @@ class StyleAlignmentModel(nn.Module):
             param.requires_grad = False
         self.reference_model.eval()
         
+        # 验证设备分配
+        print(f"Policy model device: {next(self.policy_model.parameters()).device}")
+        print(f"Reference model device: {next(self.reference_model.parameters()).device}")
         print("Dual-model framework initialized (Policy on GPU 0, Reference on GPU 1).")
     
     def _default_lora_config(self) -> Dict:
@@ -141,9 +144,12 @@ class StyleAlignmentModel(nn.Module):
         # 计算KL散度
         if self.kl_beta > 0:
             with torch.no_grad():
+                # 获取reference model实际所在的设备
+                ref_actual_device = next(self.reference_model.parameters()).device
+                
                 # 将输入移到reference model所在的设备
-                ref_input_ids = masked_input_ids.to(self.reference_device)
-                ref_attention_mask = attention_mask.to(self.reference_device) if attention_mask is not None else None
+                ref_input_ids = masked_input_ids.to(ref_actual_device)
+                ref_attention_mask = attention_mask.to(ref_actual_device) if attention_mask is not None else None
                 
                 # Reference model前向传播（不计算梯度）
                 reference_outputs = self.reference_model(
