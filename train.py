@@ -191,8 +191,8 @@ def train(config_file):
     effective_batch_size = cfg.training.per_device_train_batch_size * cfg.training.gradient_accumulation_steps * world_size
     print(f"有效Batch Size: {effective_batch_size}")
     
-    # 强制 Windows 下使用单进程加载数据
-    dataloader_num_workers = 0 if os.name == 'nt' else 4
+    # 强制将workers设为1，在DDP环境下更稳定，且避免OOM
+    dataloader_num_workers = 1
     print(f"Dataloader Workers: {dataloader_num_workers}")
 
     training_args = TrainingArguments(
