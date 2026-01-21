@@ -55,13 +55,15 @@ class StyleAlignmentModel(nn.Module):
         print(f"Loading frozen reference model to {self.reference_device}...")
         
         if self.reference_device != self.policy_device:
-            # 双GPU模式：直接指定device_map到GPU 1
+            # 双GPU模式：先加载到CPU，然后手动移到GPU 1（更可靠）
+            print("Loading to CPU first, then moving to GPU 1...")
             self.reference_model = AutoModelForCausalLM.from_pretrained(
                 model_name,
                 torch_dtype=torch.float16,
-                device_map={"":  int(str(self.reference_device).split(':')[1])},  # 提取GPU编号
                 trust_remote_code=True,
             )
+            # 显式移动所有参数到GPU 1
+            self.reference_model = self.reference_model.to(self.reference_device)
         else:
             # 单GPU模式：共享GPU 0
             self.reference_model = AutoModelForCausalLM.from_pretrained(
@@ -76,10 +78,15 @@ class StyleAlignmentModel(nn.Module):
             param.requires_grad = False
         self.reference_model.eval()
         
-        # 验证设备分配
+        # 验证所有参数的设备
+        ref_devices = set(p.device for p in self.reference_model.parameters())
         print(f"Policy model device: {next(self.policy_model.parameters()).device}")
-        print(f"Reference model device: {next(self.reference_model.parameters()).device}")
-        print("Dual-model framework initialized (Policy on GPU 0, Reference on GPU 1).")
+        print(f"Reference model devices: {ref_devices}")
+        
+        if len(ref_devices) > 1:
+            print("WARNING: Reference model parameters on multiple devices!")
+        
+        print(f"Dual-model framework initialized (Policy on {self.policy_device}, Reference on {self.reference_device}).")
     
     def _default_lora_config(self) -> Dict:
         """默认LoRA配置"""
