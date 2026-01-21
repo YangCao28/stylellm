@@ -121,7 +121,7 @@ class StyleAlignmentModel(nn.Module):
             kl_loss: KL散度损失
             logits: 模型输出logits
         """
-        # Policy model前向传播
+        # Policy model前向传播（带LoRA）
         policy_outputs = self.policy_model(
             input_ids=masked_input_ids,
             attention_mask=attention_mask,
@@ -131,6 +131,9 @@ class StyleAlignmentModel(nn.Module):
         # 重构损失（仅在掩码位置）
         rec_loss = policy_outputs.loss
         
+        # 保存policy logits（带梯度）- 必须在任何adapter操作之前
+        policy_logits = policy_outputs.logits
+        
         # 计算KL散度（单模型：临时禁用LoRA获得参考分布）
         # 只有在有LoRA且kl_beta>0时才计算KL
         has_peft_adapters = (hasattr(self.policy_model, "peft_config") and 
@@ -139,28 +142,32 @@ class StyleAlignmentModel(nn.Module):
         
         if self.kl_beta > 0 and has_peft_adapters:
             try:
-                # 禁用LoRA适配器
-                self.policy_model.disable_adapters()
-                
-                # 同一模型前向，仅获取参考logits并断开梯度
+                # 临时禁用LoRA适配器获取参考分布
                 with torch.no_grad():
+                    self.policy_model.disable_adapters()
+                    
                     reference_outputs = self.policy_model(
                         input_ids=masked_input_ids,
                         attention_mask=attention_mask,
                     )
                     reference_logits = reference_outputs.logits
-                
-                # 恢复LoRA适配器
-                self.policy_model.enable_adapters()
+                    
+                    # 立即恢复LoRA适配器
+                    self.policy_model.enable_adapters()
                 
                 # 计算KL散度
                 kl_loss = self._compute_kl_divergence(
-                    policy_logits=policy_outputs.logits,
+                    policy_logits=policy_logits,
                     reference_logits=reference_logits,
                     mask_positions=mask_positions,
                 )
             except (ValueError, AttributeError) as e:
-                # 如果adapter操作失败，跳过KL计算
+                # 如果adapter操作失败，确保恢复适配器，跳过KL计算
+                if has_peft_adapters:
+                    try:
+                        self.policy_model.enable_adapters()
+                    except:
+                        pass
                 kl_loss = torch.tensor(0.0, device=rec_loss.device)
         else:
             kl_loss = torch.tensor(0.0, device=rec_loss.device)
@@ -172,7 +179,7 @@ class StyleAlignmentModel(nn.Module):
             'loss': total_loss,
             'rec_loss': rec_loss,
             'kl_loss': kl_loss,
-            'logits': policy_outputs.logits,
+            'logits': policy_logits,  # 使用保存的logits，确保梯度完整
         }
     
     def _compute_kl_divergence(
