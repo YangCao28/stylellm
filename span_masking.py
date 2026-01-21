@@ -39,6 +39,13 @@ class SpanMaskingCollator:
             tokenizer.eos_token_id,
             tokenizer.bos_token_id,
         ])
+        
+        # 确保有mask_token_id
+        if not hasattr(tokenizer, 'mask_token_id') or tokenizer.mask_token_id is None:
+            # 如果没有mask_token，使用unk_token或随机token
+            self.mask_token_id = tokenizer.unk_token_id if hasattr(tokenizer, 'unk_token_id') else 0
+        else:
+            self.mask_token_id = tokenizer.mask_token_id
     
     def __call__(self, examples: List[Dict]) -> Dict[str, torch.Tensor]:
         """
@@ -58,24 +65,29 @@ class SpanMaskingCollator:
         # Padding
         max_len = max(len(ids) for ids in input_ids_list)
         
-        input_ids = torch.full((batch_size, max_len), self.tokenizer.pad_token_id, dtype=torch.long)
-        attention_mask = torch.zeros((batch_size, max_len), dtype=torch.long)
-        labels = torch.full((batch_size, max_len), -100, dtype=torch.long)
+        input_ids = []
+        attention_mask = []
+        labels = []
         
-        for i, ids in enumerate(input_ids_list):
+        for ids in input_ids_list:
             seq_len = len(ids)
-            input_ids[i, :seq_len] = torch.tensor(ids)
-            attention_mask[i, :seq_len] = 1
             
             # 动态生成mask
             masked_ids, label_ids = self._mask_sequence(ids)
-            input_ids[i, :seq_len] = torch.tensor(masked_ids)
-            labels[i, :seq_len] = torch.tensor(label_ids)
+            
+            # Padding
+            padded_input = masked_ids + [self.tokenizer.pad_token_id] * (max_len - seq_len)
+            padded_attention = [1] * seq_len + [0] * (max_len - seq_len)
+            padded_labels = label_ids + [-100] * (max_len - seq_len)
+            
+            input_ids.append(padded_input)
+            attention_mask.append(padded_attention)
+            labels.append(padded_labels)
         
         return {
-            'input_ids': input_ids,
-            'attention_mask': attention_mask,
-            'labels': labels,
+            'input_ids': torch.tensor(input_ids, dtype=torch.long),
+            'attention_mask': torch.tensor(attention_mask, dtype=torch.long),
+            'labels': torch.tensor(labels, dtype=torch.long),
         }
     
     def _mask_sequence(self, input_ids: List[int]) -> tuple:
@@ -151,7 +163,7 @@ class SpanMaskingCollator:
             # 80% [MASK], 10% 随机, 10% 保持不变
             rand = random.random()
             if rand < 0.8:
-                masked_ids[pos] = self.tokenizer.mask_token_id
+                masked_ids[pos] = self.mask_token_id
             elif rand < 0.9:
                 masked_ids[pos] = random.randint(0, self.tokenizer.vocab_size - 1)
             # else: 保持原样
