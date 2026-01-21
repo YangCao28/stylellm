@@ -132,9 +132,9 @@ class StyleAlignmentModel(nn.Module):
         rec_loss = policy_outputs.loss
         
         # 计算KL散度（单模型：临时禁用LoRA获得参考分布）
-        if self.kl_beta > 0 and hasattr(self.policy_model, "disable_adapter"):
+        if self.kl_beta > 0 and hasattr(self.policy_model, "disable_adapters"):
             # 禁用LoRA适配器
-            self.policy_model.disable_adapter()
+            self.policy_model.disable_adapters()
             
             # 同一模型前向，仅获取参考logits并断开梯度
             with torch.no_grad():
@@ -145,7 +145,7 @@ class StyleAlignmentModel(nn.Module):
                 reference_logits = reference_outputs.logits
             
             # 恢复LoRA适配器
-            self.policy_model.enable_adapter()
+            self.policy_model.enable_adapters()
             
             # 计算KL散度
             kl_loss = self._compute_kl_divergence(

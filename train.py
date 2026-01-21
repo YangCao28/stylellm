@@ -198,7 +198,7 @@ def setup_training(config: Config):
     )
     
     # 7. 加载模型
-    print(f"\n7. 加载双模型框架...")
+    print(f"\n7. 加载模型...")
     
     lora_config = {
         "r": config.model.lora_r,

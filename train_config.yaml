@@ -19,20 +19,20 @@ model:
   # 是否使用LoRA高效微调
   use_lora: true
   
-  # LoRA配置 (针对Qwen3-4B优化)
-  lora_r: 32              # LoRA rank - 高质量配置，追求最佳效果
-                          # 标准配置用16，显存紧张(20GB)可用8
-  lora_alpha: 64          # LoRA alpha (通常是rank的2倍)
+  # LoRA配置 (针对Qwen3-4B + 2×4090优化)
+  lora_r: 16              # LoRA rank - 标准配置（显存友好）
+                          # 高质量: 32, 显存紧张: 8
+  lora_alpha: 32          # LoRA alpha (通常是rank的2倍)
   lora_dropout: 0.05      # LoRA dropout
   lora_target_modules:    # 要应用LoRA的模块
     - "q_proj"
     - "v_proj"
     - "k_proj"
     - "o_proj"
-    - "gate_proj"         # 高质量配置：添加FFN层
+    - "gate_proj"         # 添加FFN层以提升效果
     - "up_proj"  
     - "down_proj"
-    # 注意：添加这3层会增加~20%显存但显著提升效果
+    # 注意：7个模块在4B模型上显存占用可控
 
 
 # ========================================
@@ -42,25 +42,26 @@ training:
   # 输出目录
   output_dir: "./output/wuxia_model"
   
-  # 基础训练参数 (2×RTX 4090 优化配置)
+  # 基础训练参数 (2×RTX 4090 优化配置 - DDP模式)
   num_train_epochs: 5           # 训练轮数
-  per_device_train_batch_size: 4    # 每GPU的batch size (2×4090, 24GB/卡)
-                                     # 每卡4，总共2卡，保持显存安全
+  per_device_train_batch_size: 2    # 每GPU的batch size
+                                     # DDP双卡优化：降低per_device，增加grad_accum
   per_device_eval_batch_size: 8     # 评估batch size
-  gradient_accumulation_steps: 2    # 梯度累积步数
-  # 有效batch size = 4(per_device) × 2(accumulation) × 2(GPUs) = 16
+  gradient_accumulation_steps: 8    # 梯度累积步数
+  # 有效batch size = 2(per_device) × 8(accumulation) × 2(GPUs) = 32
+  # 黄金配置：平衡显存与吞吐量
   
-  # 学习率 (针对8B模型优化)
-  learning_rate: 0.00001        # 1e-5，高质量配置用更小学习率更稳定
-                                # 标准配置: 2e-5，快速实验: 3e-5
+  # 学习率 (针对4B模型优化)
+  learning_rate: 0.00002        # 2e-5，标准配置
+                                # 快速实验: 3e-5，高质量: 1e-5
   warmup_steps: 100             # 预热步数
   weight_decay: 0.01            # 权重衰减
   max_grad_norm: 1.0            # 梯度裁剪
   lr_scheduler_type: "cosine"   # 学习率调度器 (linear/cosine/constant)
   
   # 风格对齐核心参数 (重要!)
-  kl_beta: 0.12                 # KL散度权重 - 高质量配置稍强风格
-                                # 标准: 0.1，轻度: 0.08，强风格: 0.15-0.2
+  kl_beta: 0.1                  # KL散度权重 - 标准配置
+                                # 轻度: 0.08，强风格: 0.15-0.2
   # kl_beta调优：
   #   - 风格不明显 → 降低到0.05
   #   - 输出不通顺 → 提高到0.15-0.2
@@ -83,11 +84,12 @@ training:
   eval_strategy: "steps"        # 评估策略
   eval_steps: 500               # 每N步评估一次
   
-  # GPU优化 (2×RTX 4090)
-  fp16: true                    # FP16 (4090最优，Ampere架构)
-  bf16: false                   # BF16在4090上不如fp16高效
-  gradient_checkpointing: true  # 开启以节省显存，确保稳定运行
-                                # 4090建议开启，牺牲约20%速度换显存
+  # GPU优化 (2×RTX 4090 - Ampere架构)
+  fp16: true                    # FP16混合精度（4090推荐）
+  bf16: false                   # BF16（4090上fp16更优）
+                                # 注：如要尝试bf16，设fp16=false, bf16=true
+  gradient_checkpointing: true  # 梯度检查点（节省显存，牺牲20%速度）
+                                # 建议开启以确保8B模型稳定运行
   
   # 其他
   seed: 42
