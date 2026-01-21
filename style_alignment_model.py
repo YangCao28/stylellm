@@ -67,6 +67,11 @@ class StyleAlignmentModel(nn.Module):
             )
             
             self.model = get_peft_model(self.model, lora_config)
+            
+            # 关键：启用输入梯度（gradient checkpointing需要）
+            if hasattr(self.model, 'enable_input_require_grads'):
+                self.model.enable_input_require_grads()
+            
             print(f"LoRA applied with r={config['r']}")
             self.model.print_trainable_parameters()
             
