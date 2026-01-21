@@ -32,11 +32,6 @@ class StyleAlignmentTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.masking_engine = masking_engine
     
-    def _wrap_model(self, model, training=True, dataloader=None):
-        """重写模型包装，阻止DataParallel自动包装"""
-        # 不使用DataParallel/DDP - 我们的双模型已手动分配到不同GPU
-        return model
-    
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
         重写损失计算，应用动态掩码和KL散度
