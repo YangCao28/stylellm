@@ -90,6 +90,18 @@ class StyleAlignmentModel(nn.Module):
         except ImportError:
             print("Warning: peft not installed. Running without LoRA.")
     
+    def gradient_checkpointing_enable(self, gradient_checkpointing_kwargs=None):
+        """启用梯度检查点（转发到policy_model）"""
+        if hasattr(self.policy_model, 'gradient_checkpointing_enable'):
+            self.policy_model.gradient_checkpointing_enable(gradient_checkpointing_kwargs)
+        else:
+            print("Warning: policy_model does not support gradient checkpointing")
+    
+    def gradient_checkpointing_disable(self):
+        """禁用梯度检查点（转发到policy_model）"""
+        if hasattr(self.policy_model, 'gradient_checkpointing_disable'):
+            self.policy_model.gradient_checkpointing_disable()
+    
     def forward(
         self,
         masked_input_ids: torch.Tensor,
