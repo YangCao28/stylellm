@@ -32,9 +32,15 @@ class StyleAlignmentTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.masking_engine = masking_engine
     
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
         重写损失计算，应用动态掩码和KL散度
+        
+        Args:
+            model: 模型
+            inputs: 输入数据
+            return_outputs: 是否返回输出
+            num_items_in_batch: batch中的项目数（新版Transformers参数）
         """
         # 应用动态掩码
         masked_inputs = self.masking_engine.mask_batch(inputs)
