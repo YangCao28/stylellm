@@ -30,7 +30,7 @@ class StyleAlignmentModel(nn.Module):
         """
         super().__init__()
         
-        self.kl_beta = kl_beta
+        self.kl_beta = float(kl_beta)
         
         # 设备配置 - Policy在GPU 0，Reference在GPU 1
         self.policy_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -51,52 +51,55 @@ class StyleAlignmentModel(nn.Module):
         if use_lora:
             self._apply_lora(lora_config or self._default_lora_config())
         
-        # 创建参考模型 (Reference Model) - 直接加载到目标GPU
-        print(f"Loading frozen reference model to {self.reference_device}...")
-        
-        if self.reference_device != self.policy_device:
-            # 双GPU模式：先加载到CPU，然后手动移到GPU 1（更可靠）
-            print("Loading to CPU first, then moving to GPU 1...")
-            self.reference_model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch.float16,
-                trust_remote_code=True,
-            )
-            # 显式移动所有参数到GPU 1
-            self.reference_model = self.reference_model.to(self.reference_device)
+        if self.kl_beta > 0:
+            # 创建参考模型 (Reference Model) - 直接加载到目标GPU
+            print(f"Loading frozen reference model to {self.reference_device}...")
+            
+            if self.reference_device != self.policy_device:
+                # 双GPU模式：先加载到CPU，然后手动移到GPU 1（更可靠）
+                print("Loading to CPU first, then moving to GPU 1...")
+                self.reference_model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    torch_dtype=torch.float16,
+                    trust_remote_code=True,
+                )
+                # 显式移动所有参数到GPU 1
+                self.reference_model = self.reference_model.to(self.reference_device)
+            else:
+                # 单GPU模式：共享GPU 0
+                self.reference_model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    torch_dtype=torch.float16,
+                    device_map={"":  0},
+                    trust_remote_code=True,
+                )
+            
+            # 冻结参考模型
+            for param in self.reference_model.parameters():
+                param.requires_grad = False
+            self.reference_model.eval()
+            
+            # 取消作为子模块注册，防止Trainer/Accelerate将其移动到训练设备
+            self._reference_model = self.reference_model
+            if 'reference_model' in self._modules:
+                del self._modules['reference_model']
+            
+            # 验证所有参数的设备
+            ref_devices = set(p.device for p in self._reference_model.parameters())
+            print(f"Policy model device: {next(self.policy_model.parameters()).device}")
+            print(f"Reference model devices: {ref_devices}")
+            
+            if len(ref_devices) > 1:
+                print("WARNING: Reference model parameters on multiple devices!")
+            else:
+                # 断言参考模型全部在目标设备
+                only_device = next(iter(ref_devices))
+                assert only_device == self.reference_device, (
+                    f"Reference model is on {only_device}, expected {self.reference_device}")
+            
+            print(f"Dual-model framework initialized (Policy on {self.policy_device}, Reference on {self.reference_device}).")
         else:
-            # 单GPU模式：共享GPU 0
-            self.reference_model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch.float16,
-                device_map={"":  0},
-                trust_remote_code=True,
-            )
-        
-        # 冻结参考模型
-        for param in self.reference_model.parameters():
-            param.requires_grad = False
-        self.reference_model.eval()
-
-        # 取消作为子模块注册，防止Trainer/Accelerate将其移动到训练设备
-        self._reference_model = self.reference_model
-        if 'reference_model' in self._modules:
-            del self._modules['reference_model']
-        
-        # 验证所有参数的设备
-        ref_devices = set(p.device for p in self._reference_model.parameters())
-        print(f"Policy model device: {next(self.policy_model.parameters()).device}")
-        print(f"Reference model devices: {ref_devices}")
-        
-        if len(ref_devices) > 1:
-            print("WARNING: Reference model parameters on multiple devices!")
-        else:
-            # 断言参考模型全部在目标设备
-            only_device = next(iter(ref_devices))
-            assert only_device == self.reference_device, (
-                f"Reference model is on {only_device}, expected {self.reference_device}")
-        
-        print(f"Dual-model framework initialized (Policy on {self.policy_device}, Reference on {self.reference_device}).")
+            print("KL is disabled (kl_beta <= 0). Running in single-model mode.")
     
     def _default_lora_config(self) -> Dict:
         """默认LoRA配置"""
