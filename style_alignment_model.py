@@ -32,12 +32,12 @@ class StyleAlignmentModel(nn.Module):
         
         self.kl_beta = kl_beta
         
-        # 加载训练模型 (Policy Model)
-        print(f"Loading policy model from {model_name}...")
+        # 加载训练模型 (Policy Model) - 放在GPU 0
+        print(f"Loading policy model from {model_name} to GPU 0...")
         self.policy_model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float16,
-            device_map="auto",
+            device_map={"": 0},  # 强制放在GPU 0
             trust_remote_code=True,
         )
         
@@ -45,12 +45,12 @@ class StyleAlignmentModel(nn.Module):
         if use_lora:
             self._apply_lora(lora_config or self._default_lora_config())
         
-        # 创建参考模型 (Reference Model) - 冻结
-        print("Creating frozen reference model...")
+        # 创建参考模型 (Reference Model) - 放在GPU 1
+        print("Creating frozen reference model on GPU 1...")
         self.reference_model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float16,
-            device_map="auto",
+            device_map={"": 1},  # 强制放在GPU 1
             trust_remote_code=True,
         )
         
@@ -59,7 +59,7 @@ class StyleAlignmentModel(nn.Module):
             param.requires_grad = False
         self.reference_model.eval()
         
-        print("Dual-model framework initialized.")
+        print("Dual-model framework initialized (Policy on GPU 0, Reference on GPU 1).")
     
     def _default_lora_config(self) -> Dict:
         """默认LoRA配置"""
