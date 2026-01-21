@@ -77,6 +77,11 @@ class StyleAlignmentModel(nn.Module):
         for param in self.reference_model.parameters():
             param.requires_grad = False
         self.reference_model.eval()
+
+        # 取消作为子模块注册，防止Trainer/Accelerate将其移动到训练设备
+        self._reference_model = self.reference_model
+        if 'reference_model' in self._modules:
+            del self._modules['reference_model']
         
         # 验证所有参数的设备
         ref_devices = set(p.device for p in self.reference_model.parameters())
@@ -169,7 +174,7 @@ class StyleAlignmentModel(nn.Module):
                 ref_attention_mask = attention_mask.to(self.reference_device) if attention_mask is not None else None
                 
                 # Reference model前向传播（不计算梯度）
-                reference_outputs = self.reference_model(
+                reference_outputs = self._reference_model(
                     input_ids=ref_input_ids,
                     attention_mask=ref_attention_mask,
                 )
