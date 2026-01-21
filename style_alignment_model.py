@@ -37,6 +37,7 @@ class StyleAlignmentModel(nn.Module):
             torch_dtype=torch.float16,
             device_map=device,
             trust_remote_code=True,
+            low_cpu_mem_usage=True, # 优化加载内存
         )
         
         # 应用 LoRA

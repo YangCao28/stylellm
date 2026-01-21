@@ -43,5 +43,5 @@ training:
   
   fp16: true
   bf16: false
-  gradient_checkpointing: false    # 关闭梯度检查点以防止卡死
+  gradient_checkpointing: true     # 重新开启节省显存
   seed: 42
