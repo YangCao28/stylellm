@@ -34,44 +34,59 @@ def load_config(config_file):
 
 
 def process_text_files(data_dir, output_file, tokenizer, max_length=512, min_length=50):
-    """处理文本文件 - 滑动窗口切分"""
-    print(f"处理 {data_dir} 中的txt文件 (滑动窗口)...")
+    """处理文本文件 - 基于Token的滑动窗口 (保证100%覆盖)"""
+    print(f"处理 {data_dir} 中的txt文件 (Token滑动窗口)...")
     
     import json
     from pathlib import Path
     
     texts = []
     
-    # 估算：1 token ≈ 1.5 中文字符. 保守起见用 2 chars/token 或 3 chars/token
-    # 如果 max_length=1024, chunk_size 可以设为 2000 字符
-    chunk_size = max_length * 2  
-    stride = int(chunk_size * 0.7)  # 30% 重叠
-    print(f"切分策略: Chunk Size={chunk_size} chars, Stride={stride} chars")
-
-    # 递归查找所有txt文件
-    files = list(Path(data_dir).rglob("*.txt"))
+    # 获取所有文件
+    path_obj = Path(data_dir)
+    pass_1 = list(path_obj.rglob("*.txt"))
+    pass_2 = list(path_obj.rglob("*.TXT"))
+    files = sorted(list(set(pass_1 + pass_2)))
     print(f"找到 {len(files)} 个文件")
+    
+    # 策略: 按 Token 切分
+    # 留一点余量(buffer)给特殊token，防止二次tokenize时溢出
+    chunk_size = max_length - 4 
+    stride = int(chunk_size * 0.8) # 20% 重叠
+    print(f"Token切分策略: Chunk={chunk_size}, Stride={stride}")
+
+    total_tokens = 0
     
     for txt_file in files:
         try:
             with open(txt_file, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
+                content = f.read().strip()
             
-            # 清理：统一换行符
-            content = content.replace('\r\n', '\n').strip()
             if not content:
                 continue
-
-            # 滑动窗口切分
-            for i in range(0, len(content), stride):
-                segment = content[i : i + chunk_size]
                 
-                # 如果最后一段太短，就丢弃（除非是唯一的段）
-                if len(segment) < min_length and i > 0:
-                    continue
-                    
+            # 1. 先全部转为 Token ID (不加特殊token，纯内容)
+            # 注意：对于超大文件，可能需要分块读，但一般小说几MB内存扛得住
+            input_ids = tokenizer.encode(content, add_special_tokens=False)
+            total_tokens += len(input_ids)
+            
+            # 2. Token 级滑动窗口
+            for i in range(0, len(input_ids), stride):
+                chunk_ids = input_ids[i : i + chunk_size]
+                
+                # 只有当它是该文件的唯一片段，或者长度足够时才保留
+                if len(chunk_ids) < min_length:
+                    if i == 0: 
+                        pass # 文件太短也保留
+                    else:
+                        continue # 只有尾部丢弃
+                
+                # 3. 转回文本保存
+                # decode 会还原成文本，虽然可能会丢失极少量的空格信息，但对语义无影响
+                segment_text = tokenizer.decode(chunk_ids)
+                
                 texts.append({
-                    'text': segment,
+                    'text': segment_text,
                     'source': str(txt_file.name)
                 })
                 
@@ -83,7 +98,7 @@ def process_text_files(data_dir, output_file, tokenizer, max_length=512, min_len
         for item in texts:
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
     
-    print(f"✓ 处理完成: {len(texts)} 个文本块")
+    print(f"✓ 处理完成: {len(texts)} 个样本, 总Token数(估): {total_tokens}")
     return len(texts)
 
 
