@@ -53,14 +53,21 @@ class StyleAlignmentTrainer(Trainer):
             mask_positions=masked_inputs['mask_positions'],
         )
         
+        # 确保返回的loss为标量（DDP下可能是向量）
         loss = outputs['loss']
+        if hasattr(loss, 'ndim') and loss.ndim > 0:
+            loss = loss.mean()
         
         # 记录各项损失
         if self.state.global_step % self.args.logging_steps == 0:
+            rec = outputs['rec_loss']
+            kl = outputs['kl_loss']
+            rec_val = rec.detach().mean().item() if hasattr(rec, 'ndim') and rec.ndim > 0 else rec.detach().item()
+            kl_val = kl.detach().mean().item() if hasattr(kl, 'ndim') and kl.ndim > 0 else kl.detach().item()
             self.log({
-                'rec_loss': outputs['rec_loss'].item(),
-                'kl_loss': outputs['kl_loss'].item(),
-                'total_loss': loss.item(),
+                'rec_loss': rec_val,
+                'kl_loss': kl_val,
+                'total_loss': loss.detach().item(),
             })
         
         return (loss, outputs) if return_outputs else loss
