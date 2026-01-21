@@ -38,6 +38,7 @@ class StyleAlignmentModel(nn.Module):
             model_name,
             torch_dtype=torch.float16,
             device_map="auto",
+            trust_remote_code=True,
         )
         
         # 应用LoRA（如果需要）
@@ -50,6 +51,7 @@ class StyleAlignmentModel(nn.Module):
             model_name,
             torch_dtype=torch.float16,
             device_map="auto",
+            trust_remote_code=True,
         )
         
         # 冻结参考模型

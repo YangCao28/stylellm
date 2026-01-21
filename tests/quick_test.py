@@ -18,9 +18,13 @@ def quick_test():
     config.model.model_name_or_path = "Qwen/Qwen3-8B"  # 使用Qwen3-8B
     config.training.num_train_epochs = 1
     config.training.per_device_train_batch_size = 1
+    config.training.gradient_accumulation_steps = 1  # 减少累积
     config.training.max_steps = 10  # 只训练10步
-    config.data.max_files = 5  # 只使用5个文件
+    config.training.gradient_checkpointing = True  # 启用梯度检查点
+    config.training.fp16 = True  # 启用fp16节省显存
+    config.data.max_files = 2  # 只使用2个文件（更少数据）
     config.data.min_length = 10  # 测试时降低最小长度
+    config.data.max_length = 256  # 减少序列长度（从512降到256）
     
     print("配置:")
     print(f"  模型: {config.model.model_name_or_path}")
