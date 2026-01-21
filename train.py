@@ -217,12 +217,7 @@ def setup_training(config: Config):
         model.policy_model.resize_token_embeddings(len(tokenizer))
         print(f"调整Policy词表大小到 {len(tokenizer)}")
 
-    # 同步Reference模型的词表大小，避免[MASK]等新token在KL计算时越界或设备错配
-    if hasattr(model, "_reference_model") and len(tokenizer) > model._reference_model.config.vocab_size:
-        model._reference_model.resize_token_embeddings(len(tokenizer))
-        # 确保resize后仍在目标设备
-        model._reference_model.to(model.reference_device)
-        print(f"调整Reference词表大小到 {len(tokenizer)} 并保持在 {model.reference_device}")
+    # 单模型模式：无需同步独立reference模型词表
     
     print("\n✓ 训练环境设置完成!")
     

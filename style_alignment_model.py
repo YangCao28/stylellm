@@ -52,54 +52,12 @@ class StyleAlignmentModel(nn.Module):
             self._apply_lora(lora_config or self._default_lora_config())
         
         if self.kl_beta > 0:
-            # 创建参考模型 (Reference Model) - 直接加载到目标GPU
-            print(f"Loading frozen reference model to {self.reference_device}...")
-            
-            if self.reference_device != self.policy_device:
-                # 双GPU模式：先加载到CPU，然后手动移到GPU 1（更可靠）
-                print("Loading to CPU first, then moving to GPU 1...")
-                self.reference_model = AutoModelForCausalLM.from_pretrained(
-                    model_name,
-                    torch_dtype=torch.float16,
-                    trust_remote_code=True,
-                )
-                # 显式移动所有参数到GPU 1
-                self.reference_model = self.reference_model.to(self.reference_device)
-            else:
-                # 单GPU模式：共享GPU 0
-                self.reference_model = AutoModelForCausalLM.from_pretrained(
-                    model_name,
-                    torch_dtype=torch.float16,
-                    device_map={"":  0},
-                    trust_remote_code=True,
-                )
-            
-            # 冻结参考模型
-            for param in self.reference_model.parameters():
-                param.requires_grad = False
-            self.reference_model.eval()
-            
-            # 取消作为子模块注册，防止Trainer/Accelerate将其移动到训练设备
-            self._reference_model = self.reference_model
-            if 'reference_model' in self._modules:
-                del self._modules['reference_model']
-            
-            # 验证所有参数的设备
-            ref_devices = set(p.device for p in self._reference_model.parameters())
-            print(f"Policy model device: {next(self.policy_model.parameters()).device}")
-            print(f"Reference model devices: {ref_devices}")
-            
-            if len(ref_devices) > 1:
-                print("WARNING: Reference model parameters on multiple devices!")
-            else:
-                # 断言参考模型全部在目标设备
-                only_device = next(iter(ref_devices))
-                assert only_device == self.reference_device, (
-                    f"Reference model is on {only_device}, expected {self.reference_device}")
-            
-            print(f"Dual-model framework initialized (Policy on {self.policy_device}, Reference on {self.reference_device}).")
+            print("KL enabled. Using single-model KL: reference logits via LoRA-disabled pass.")
         else:
-            print("KL is disabled (kl_beta <= 0). Running in single-model mode.")
+            print("KL disabled (kl_beta <= 0). Running single-model CE only.")
+
+        # 不使用独立的reference模型
+        self._reference_model = None
     
     def _default_lora_config(self) -> Dict:
         """默认LoRA配置"""
@@ -174,21 +132,26 @@ class StyleAlignmentModel(nn.Module):
         # 重构损失（仅在掩码位置）
         rec_loss = policy_outputs.loss
         
-        # 计算KL散度
+        # 计算KL散度（单模型：临时禁用LoRA获得参考分布）
         if self.kl_beta > 0:
             with torch.no_grad():
-                # 将输入移到reference model所在的设备
-                ref_input_ids = masked_input_ids.to(self.reference_device)
-                ref_attention_mask = attention_mask.to(self.reference_device) if attention_mask is not None else None
+                # 禁用LoRA适配器（如果存在）
+                if hasattr(self.policy_model, "disable_adapter"):
+                    self.policy_model.disable_adapter()
+                    lora_disabled = True
+                else:
+                    lora_disabled = False
                 
-                # Reference model前向传播（不计算梯度）
-                reference_outputs = self._reference_model(
-                    input_ids=ref_input_ids,
-                    attention_mask=ref_attention_mask,
+                # 同一模型前向（不计算梯度），仅获取logits
+                reference_outputs = self.policy_model(
+                    input_ids=masked_input_ids,
+                    attention_mask=attention_mask,
                 )
+                reference_logits = reference_outputs.logits
                 
-                # 将reference logits移回到policy model的设备
-                reference_logits = reference_outputs.logits.to(self.policy_device)
+                # 恢复LoRA适配器
+                if lora_disabled and hasattr(self.policy_model, "enable_adapter"):
+                    self.policy_model.enable_adapter()
             
             # 计算KL散度
             kl_loss = self._compute_kl_divergence(
