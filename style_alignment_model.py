@@ -144,12 +144,9 @@ class StyleAlignmentModel(nn.Module):
         # 计算KL散度
         if self.kl_beta > 0:
             with torch.no_grad():
-                # 获取reference model实际所在的设备
-                ref_actual_device = next(self.reference_model.parameters()).device
-                
                 # 将输入移到reference model所在的设备
-                ref_input_ids = masked_input_ids.to(ref_actual_device)
-                ref_attention_mask = attention_mask.to(ref_actual_device) if attention_mask is not None else None
+                ref_input_ids = masked_input_ids.to(self.reference_device)
+                ref_attention_mask = attention_mask.to(self.reference_device) if attention_mask is not None else None
                 
                 # Reference model前向传播（不计算梯度）
                 reference_outputs = self.reference_model(
@@ -158,7 +155,7 @@ class StyleAlignmentModel(nn.Module):
                 )
                 
                 # 将reference logits移回到policy model的设备
-                reference_logits = reference_outputs.logits.to(policy_outputs.logits.device)
+                reference_logits = reference_outputs.logits.to(self.policy_device)
             
             # 计算KL散度
             kl_loss = self._compute_kl_divergence(

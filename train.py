@@ -224,6 +224,9 @@ def train(config: Config):
     Args:
         config: 配置对象
     """
+    # 禁用DataParallel - 我们的双模型已经手动分配到不同GPU
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 只让Trainer看到GPU 0
+    
     # 设置训练环境
     model, tokenizer, train_dataset, eval_dataset, masking_engine = setup_training(config)
     
@@ -255,6 +258,9 @@ def train(config: Config):
         lr_scheduler_type=config.training.lr_scheduler_type,
         remove_unused_columns=config.training.remove_unused_columns,
         report_to=["tensorboard"],
+        # 禁用DataParallel - 我们手动管理双模型的GPU分配
+        ddp_find_unused_parameters=False,
+        no_cuda=False,
     )
     
     # 数据collator
