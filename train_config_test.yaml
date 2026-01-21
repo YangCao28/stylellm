@@ -43,5 +43,5 @@ training:
   
   fp16: true             # Windows用fp16
   bf16: false
-  gradient_checkpointing: true
+  gradient_checkpointing: false  # 暂时关闭，测试LoRA训练
   seed: 42
