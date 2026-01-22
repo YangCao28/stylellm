@@ -56,13 +56,19 @@ def process_text_files(data_dir, output_file, tokenizer, max_length=512, min_len
     print(f"Token切分策略: Chunk={chunk_size}, Stride={stride}")
 
     total_tokens = 0
+    total_files = len(files)
     
-    for txt_file in files:
+    for idx, txt_file in enumerate(files):
         try:
+            # 打印进度
+            if (idx + 1) % 10 == 0 or idx == 0:
+                 print(f"[{idx + 1}/{total_files}] Processing: {txt_file.name}")
+                 
             with open(txt_file, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read().strip()
             
             if not content:
+                print(f"  -> Skipping empty file: {txt_file.name}")
                 continue
                 
             # 1. 先全部转为 Token ID (不加特殊token，纯内容)
@@ -312,7 +318,24 @@ def train(config_file):
     print("开始训练...")
     print("="*60 + "\n")
     
-    trainer.train()
+    # 解析命令行参数中的 resume_from_checkpoint
+    import sys
+    resume_from_checkpoint = False
+    if "--resume_from_checkpoint" in sys.argv:
+        try:
+            resume_idx = sys.argv.index("--resume_from_checkpoint")
+            val = sys.argv[resume_idx + 1]
+            if val.lower() == "true":
+                resume_from_checkpoint = True
+            elif os.path.isdir(val):
+                resume_from_checkpoint = val
+        except:
+             resume_from_checkpoint = True
+             
+    if resume_from_checkpoint:
+        print(f"!!! 接续训练 (Resume): {resume_from_checkpoint} !!!")
+    
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     
     # 11. 保存
     print(f"\n保存模型到: {cfg.training.output_dir}")

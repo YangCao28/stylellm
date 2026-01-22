@@ -29,7 +29,7 @@ data:
 training:
   output_dir: "./output/full_run"
   
-  num_train_epochs: 3
+  num_train_epochs: 6              # 增加到 6 个 epoch (原为3个)
   
   # 显存优化策略 (2x RTX 4090 24GB)
   # 目标: 避免使用 Gradient Checkpointing (防止死锁)，同时最大化利用显存
@@ -43,8 +43,11 @@ training:
   
   logging_steps: 1
   save_steps: 500
-  eval_steps: 500
+  eval_steps: 500             # 每500步做一次验证
   save_total_limit: 3
+  
+  eval_strategy: "steps"      # 显式开启验证策略
+  metric_for_best_model: "eval_loss"
   
   fp16: false
   bf16: true                          # 推荐使用 bf16
