@@ -150,6 +150,17 @@ def train(config_file):
     print(f"加载配置: {config_file}")
     cfg = load_config(config_file)
     
+    # [新增] 允许命令行覆盖 output_dir
+    import sys
+    if "--output_dir" in sys.argv:
+        try:
+            out_idx = sys.argv.index("--output_dir")
+            new_output_dir = sys.argv[out_idx + 1]
+            print(f"!!! 命令行覆盖: output_dir 改为 {new_output_dir}")
+            cfg.training.output_dir = new_output_dir
+        except IndexError:
+            pass
+
     # 1. Tokenizer
     print(f"\n1. 加载 tokenizer: {cfg.model.model_name_or_path}")
     tokenizer = AutoTokenizer.from_pretrained(
