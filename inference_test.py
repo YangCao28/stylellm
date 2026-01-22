@@ -38,21 +38,25 @@ def generate_wuxia(base_model_path, lora_path, prompt_text):
 
     model.eval()
 
-    # 原作提示词构造
-    # 我们训练的是 Causal LM (续写)，所以直接把开头给它，让它往下编
-    # 或者如果我们想让它“改写”，通常最好用 Instruction Tuning 的格式，
-    # 但因为我们这次只有纯文本训练，最好的测试方法是：
-    # 给它每句话的开头，看它怎么把这一句“圆”成武侠风；或者直接让它续写。
-    
-    print("\n" + "="*40)
-    print("输入文本:")
-    print(prompt_text)
-    print("="*40 + "\n")
+    # 构造 Prompt：使用 Few-shot 引导模型进行改写
+    # 即使是 Base 模型，通过 LoRA 加持风格，配合 Few-shot 也能实现风格迁移
+    few_shot_prompt = (
+        "将以下文字改写为古龙武侠小说风格：\n\n"
+        "原文：那天早上他吃了一个苹果，心情很好。\n"
+        "改写：桌上有一个苹果。他盯着这个苹果已看了很久。忽然间，他拿起苹果咬了一口，嘴边泛起了一丝冷笑。\n\n"
+        "原文：外面下雨了，他不想出门。\n"
+        "改写：窗外的雨，像是一把把冰冷的刀，无情地刮着大地。这种天气，只有死人才会想出门。\n\n"
+        f"原文：{prompt_text}\n"
+        "改写："
+    )
 
-    # 构造 Prompt：为了引导它进入“武侠模式”，我们可以加个强制的前缀
-    # 但既然是 Base Model 微调，它应该直接就能续写武侠
+    print("\n" + "="*40)
+    print("构造 Few-shot Prompt (引导改写):")
+    print("="*40)
+    print(few_shot_prompt)
+    print("="*40 + "\n")
     
-    inputs = tokenizer(prompt_text, return_tensors="pt").to(model.device)
+    inputs = tokenizer(few_shot_prompt, return_tensors="pt").to(model.device)
 
     print("生成中...", end="", flush=True)
     with torch.no_grad():
@@ -64,11 +68,15 @@ def generate_wuxia(base_model_path, lora_path, prompt_text):
             repetition_penalty=1.1,    # 防止复读机
             do_sample=True,
             pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id
+            eos_token_id=tokenizer.eos_token_id,
+            stop_strings=["原文：", "改写："], # 防止它自己继续编造新的原文
+            tokenizer=tokenizer
         )
     print(" Done!\n")
 
-    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    # 只截取生成的部分
+    full_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    generated_text = full_output[len(few_shot_prompt):].strip()
     
     print("="*40)
     print("生成结果 (武侠版白雪公主?):")
